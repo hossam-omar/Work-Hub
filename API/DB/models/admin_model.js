@@ -6,11 +6,16 @@ const adminSchema = new Schema(
     name: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 100,
     },
     email: {
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
     },
     password: {
       type: String,
@@ -20,10 +25,13 @@ const adminSchema = new Schema(
     image_url: {
       type: String,
       required: false,
+      trim: true,
+      maxlength: 2048,
     },
     activityStatus: {
       type: String,
       default: "offline",
+      enum: ["online", "offline"],
       required: false,
     },
     lastLogin: {
@@ -33,6 +41,7 @@ const adminSchema = new Schema(
     role: {
       type: String,
       default: "admin",
+      enum: ["admin"],
       required: false,
     },
     token: {

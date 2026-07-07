@@ -41,7 +41,7 @@ export const getAllAdmins = async (req, res) => {
 
 // Add Admin
 export const addAdmin = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, image_url, activityStatus } = req.body;
 
   const admin = await AdminModel.findOne({ email });
   if (admin) {
@@ -57,6 +57,8 @@ export const addAdmin = async (req, res) => {
     name,
     email,
     password: hashedPassword,
+    image_url,
+    activityStatus,
   });
 
   try {
@@ -129,13 +131,13 @@ export const updateAdminInfo = async (req, res) => {
 // Update Admin Password
 export const updateAdminPassword = async (req, res) => {
   const adminId = req.params.id;
-  const { password, newPassword, confirmNewPassword } = req.body;
+  const { currentPassword, newPassword, confirmPassword } = req.body;
 
-  if (!password || !newPassword || !confirmNewPassword) {
+  if (!currentPassword || !newPassword || !confirmPassword) {
     return res.status(400).json({ msg: "Password fields are required" });
   }
 
-  if (newPassword !== confirmNewPassword) {
+  if (newPassword !== confirmPassword) {
     return res.status(400).json({ msg: "Passwords don't match" });
   }
 
@@ -151,7 +153,10 @@ export const updateAdminPassword = async (req, res) => {
     return res.status(404).json({ msg: "Admin not found" });
   }
 
-  const passwordMatches = await bcrypt.compare(password, adminToUpdate.password);
+  const passwordMatches = await bcrypt.compare(
+    currentPassword,
+    adminToUpdate.password,
+  );
 
   if (!passwordMatches) {
     return res.status(400).json({ msg: "Wrong password" });

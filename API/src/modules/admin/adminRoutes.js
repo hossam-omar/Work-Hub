@@ -1,11 +1,7 @@
 import express from "express";
 import valMiddleware, {
-  validateParams,
+  validateObjectIdParams,
 } from "../../middleware/val.middleware.js";
-import {
-  sigupSchema,
-  updatePasswordSchema,
-} from "../validation/validation.js";
 import {
   addAdmin,
   deleteAdmin,
@@ -15,7 +11,11 @@ import {
   uploadAdminImage,
 } from "./adminController.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import { updateInfoSchema } from "./adminSchema.js";
+import {
+  createAdminSchema,
+  updateAdminPasswordSchema,
+  updateInfoSchema,
+} from "./adminSchema.js";
 import auth from "../../middleware/auth.middleware.js";
 import endPoints from "../../middleware/endPoints.js";
 import { upload } from "../../middleware/uploadImages.js";
@@ -30,33 +30,33 @@ router.get(
 router.post(
   "/addAdmin",
   auth(endPoints.admin),
-  valMiddleware(sigupSchema),
+  valMiddleware(createAdminSchema, { assignValidatedData: true }),
   asyncHandler(addAdmin),
 );
 router.put(
   "/uploadAdminImage/:id",
-  validateParams(),
+  validateObjectIdParams("id"),
   auth(endPoints.admin),
   upload.single("image"),
   asyncHandler(uploadAdminImage),
 );
 router.put(
   "/updateAdminInfo/:id",
-  validateParams(),
+  validateObjectIdParams("id"),
   auth(endPoints.admin),
-  valMiddleware(updateInfoSchema),
+  valMiddleware(updateInfoSchema, { assignValidatedData: true }),
   asyncHandler(updateAdminInfo),
 );
 router.put(
   "/updateAdminPassword/:id",
-  validateParams(),
+  validateObjectIdParams("id"),
   auth(endPoints.admin),
-  valMiddleware(updatePasswordSchema),
+  valMiddleware(updateAdminPasswordSchema, { assignValidatedData: true }),
   asyncHandler(updateAdminPassword),
 );
 router.delete(
   "/deleteAdmin/:id",
-  validateParams(),
+  validateObjectIdParams("id"),
   auth(endPoints.admin),
   asyncHandler(deleteAdmin),
 );
