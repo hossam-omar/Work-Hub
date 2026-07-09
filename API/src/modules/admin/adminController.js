@@ -1,6 +1,13 @@
 import bcrypt from "bcryptjs";
+import fs from "fs/promises";
+import { fileURLToPath } from "url";
+import path from "path";
 import AdminModel from "../../../DB/models/admin_model.js";
 import { validatePassword } from "../../middleware/val.middleware.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.resolve(__dirname, "../../../uploads");
 
 const adminResponseFields = [
   "_id",
@@ -28,8 +35,68 @@ const sanitizeAdmin = (admin) => {
 
 const isDuplicateEmailError = (error) => {
   return (
-    error?.code === 11000 && (error?.keyPattern?.email || error?.keyValue?.email)
+    error?.code === 11000 &&
+    (error?.keyPattern?.email || error?.keyValue?.email)
   );
+};
+
+const buildAdminImageUrl = (req, filename) => {
+  return `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+};
+
+const getSafeUploadedFilePath = (imageUrl, req) => {
+  if (!imageUrl || typeof imageUrl !== "string") {
+    return null;
+  }
+
+  let pathname = imageUrl;
+
+  try {
+    const parsedUrl = new URL(imageUrl);
+
+    if (
+      parsedUrl.host === req.get("host") &&
+      parsedUrl.pathname.startsWith("/uploads/")
+    ) {
+      pathname = parsedUrl.pathname;
+    } else {
+      return null;
+    }
+  } catch {
+    pathname = imageUrl;
+  }
+
+  const normalizedFile = pathname
+    .replace(/^\/+uploads\/+/i, "")
+    .replace(/^uploads\/+/i, "");
+
+  if (
+    !normalizedFile ||
+    normalizedFile.includes("/") ||
+    normalizedFile.includes("\\")
+  ) {
+    return null;
+  }
+
+  const filePath = path.resolve(uploadsDir, normalizedFile);
+
+  if (!filePath.startsWith(`${uploadsDir}${path.sep}`)) {
+    return null;
+  }
+
+  return filePath;
+};
+
+const cleanupUploadedFile = async (filePath) => {
+  if (!filePath) {
+    return;
+  }
+
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    // Best-effort cleanup only; upload responses should not fail on stale files.
+  }
 };
 
 // Get All Admins
@@ -45,7 +112,7 @@ export const addAdmin = async (req, res) => {
 
   const admin = await AdminModel.findOne({ email });
   if (admin) {
-    return res.status(409).json({ msg: "Email already exists" });
+    return res.status(409).json({ message: "Email already exists" });
   }
 
   const hashedPassword = await bcrypt.hash(
@@ -65,14 +132,14 @@ export const addAdmin = async (req, res) => {
     await newAdmin.save();
   } catch (error) {
     if (isDuplicateEmailError(error)) {
-      return res.status(409).json({ msg: "Email already exists" });
+      return res.status(409).json({ message: "Email already exists" });
     }
 
     throw error;
   }
 
   return res.status(201).json({
-    msg: "Admin added successfully",
+    message: "Admin added successfully",
     admin: sanitizeAdmin(newAdmin),
   });
 };
@@ -90,13 +157,13 @@ export const updateAdminInfo = async (req, res) => {
   });
 
   if (Object.keys(updateData).length === 0) {
-    return res.status(400).json({ msg: "No valid admin fields provided" });
+    return res.status(400).json({ message : "No valid admin fields provided" });
   }
 
   const adminToUpdate = await AdminModel.findById(adminId);
 
   if (!adminToUpdate) {
-    return res.status(404).json({ msg: "Admin not found" });
+    return res.status(404).json({ message: "Admin not found" });
   }
 
   if (updateData.email !== undefined) {
@@ -106,7 +173,7 @@ export const updateAdminInfo = async (req, res) => {
     });
 
     if (existingAdmin) {
-      return res.status(409).json({ msg: "Email already exists" });
+      return res.status(409).json({ message: "Email already exists" });
     }
   }
 
@@ -116,14 +183,14 @@ export const updateAdminInfo = async (req, res) => {
     await adminToUpdate.save();
   } catch (error) {
     if (isDuplicateEmailError(error)) {
-      return res.status(409).json({ msg: "Email already exists" });
+      return res.status(409).json({ message: "Email already exists" });
     }
 
     throw error;
   }
 
   return res.status(200).json({
-    msg: "Admin has been updated successfuly.",
+    message: "Admin has been updated successfully.",
     admin: sanitizeAdmin(adminToUpdate),
   });
 };
@@ -134,23 +201,23 @@ export const updateAdminPassword = async (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
 
   if (!currentPassword || !newPassword || !confirmPassword) {
-    return res.status(400).json({ msg: "Password fields are required" });
+    return res.status(400).json({ message: "Password fields are required" });
   }
 
   if (newPassword !== confirmPassword) {
-    return res.status(400).json({ msg: "Passwords don't match" });
+    return res.status(400).json({ message: "Passwords don't match" });
   }
 
   if (!validatePassword(newPassword)) {
     return res.status(400).json({
-      msg: "Password is not valid. Please follow the password pattern.",
+      message: "Password is not valid. Please follow the password pattern.",
     });
   }
 
   const adminToUpdate = await AdminModel.findById(adminId).select("+password");
 
   if (!adminToUpdate) {
-    return res.status(404).json({ msg: "Admin not found" });
+    return res.status(404).json({ message: "Admin not found" });
   }
 
   const passwordMatches = await bcrypt.compare(
@@ -159,7 +226,7 @@ export const updateAdminPassword = async (req, res) => {
   );
 
   if (!passwordMatches) {
-    return res.status(400).json({ msg: "Wrong password" });
+    return res.status(400).json({ message: "Wrong password" });
   }
 
   const newPasswordMatchesCurrent = await bcrypt.compare(
@@ -170,7 +237,7 @@ export const updateAdminPassword = async (req, res) => {
   if (newPasswordMatchesCurrent) {
     return res
       .status(400)
-      .json({ msg: "You cannot use your current password as new password" });
+      .json({ message: "You cannot use your current password as new password" });
   }
 
   adminToUpdate.password = await bcrypt.hash(
@@ -181,39 +248,50 @@ export const updateAdminPassword = async (req, res) => {
   await adminToUpdate.save();
 
   return res.status(200).json({
-    msg: "Admin password has been updated successfully.",
+    message: "Admin password has been updated successfully.",
     admin: sanitizeAdmin(adminToUpdate),
   });
 };
 
 // Upload Admin Image
-export const uploadAdminImage = async (req, res, next) => {
-  try {
-    if (!req.file) {
-      return res
-        .status(404)
-        .send({ success: false, message: "Image is required" });
-    }
-
-    const id = req.params.id;
-
-    if (id == undefined) {
-      return res
-        .status(404)
-        .send({ success: false, message: "id is required" });
-    }
-
-    const cover_url = req.file.filename;
-
-    const filter = { _id: id };
-    const update = { $set: { image_url: cover_url } };
-
-    await AdminModel.updateOne(filter, update);
-
-    res.status(200).json({ msg: "image uploaded successfuly" });
-  } catch (error) {
-    res.status(404).json({ success: false, message: "Server Error" });
+export const uploadAdminImage = async (req, res) => {
+  if (!req.file) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Image is required" });
   }
+
+  const adminId = req.params.id;
+  const uploadedFilePath = req.file.path;
+  const adminToUpdate = await AdminModel.findById(adminId);
+
+  if (!adminToUpdate) {
+    await cleanupUploadedFile(uploadedFilePath);
+    return res.status(404).json({ message: "Admin not found" });
+  }
+
+  const previousImagePath = getSafeUploadedFilePath(
+    adminToUpdate.image_url,
+    req,
+  );
+  adminToUpdate.image_url = buildAdminImageUrl(req, req.file.filename);
+
+  try {
+    await adminToUpdate.save();
+  } catch (error) {
+    await cleanupUploadedFile(uploadedFilePath);
+    throw error;
+  }
+
+  if (previousImagePath && previousImagePath !== uploadedFilePath) {
+    await cleanupUploadedFile(previousImagePath);
+  }
+
+  return res.status(200).json({
+    message: "Image uploaded successfully",
+    admin: sanitizeAdmin(adminToUpdate),
+    image_url: adminToUpdate.image_url,
+  });
 };
 
 // Delete Admin
@@ -222,10 +300,10 @@ export const deleteAdmin = async (req, res) => {
   const adminToDelete = await AdminModel.findById(adminId);
 
   if (!adminToDelete) {
-    return res.status(404).json({ msg: "Admin not found" });
+    return res.status(404).json({ message: "Admin not found" });
   }
 
   await AdminModel.deleteOne({ _id: adminId });
 
-  return res.status(200).json({ msg: "Admin has been deleted successfuly." });
+  return res.status(200).json({ message: "Admin has been deleted successfully." });
 };
