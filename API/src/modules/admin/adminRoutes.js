@@ -18,7 +18,7 @@ import {
 } from "./adminSchema.js";
 import auth from "../../middleware/auth.middleware.js";
 import endPoints from "../../middleware/endPoints.js";
-import { upload } from "../../middleware/uploadImages.js";
+import { uploadImage } from "../../middleware/uploadImages.js";
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ router.put(
   "/uploadAdminImage/:id",
   validateObjectIdParams("id"),
   auth(endPoints.admin),
-  upload.single("image"),
+  uploadImage("image"),
   asyncHandler(uploadAdminImage),
 );
 router.put(
