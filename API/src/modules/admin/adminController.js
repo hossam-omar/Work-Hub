@@ -8,6 +8,7 @@ import { validatePassword } from "../../middleware/val.middleware.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, "../../../uploads");
+const defaultSaltRounds = 10;
 
 const adminResponseFields = [
   "_id",
@@ -40,6 +41,16 @@ const isDuplicateEmailError = (error) => {
   );
 };
 
+const getSaltRounds = () => {
+  const configuredRounds = Number(process.env.SALT_ROUND);
+
+  return Number.isInteger(configuredRounds) &&
+    configuredRounds >= 4 &&
+    configuredRounds <= 31
+    ? configuredRounds
+    : defaultSaltRounds;
+};
+
 const buildAdminImageUrl = (req, filename) => {
   return `${req.protocol}://${req.get("host")}/uploads/${filename}`;
 };
@@ -51,7 +62,7 @@ const getSafeUploadedFilePath = (imageUrl, req) => {
 
   let pathname = imageUrl;
 
-  try {
+  if (URL.canParse(imageUrl)) {
     const parsedUrl = new URL(imageUrl);
 
     if (
@@ -62,8 +73,6 @@ const getSafeUploadedFilePath = (imageUrl, req) => {
     } else {
       return null;
     }
-  } catch {
-    pathname = imageUrl;
   }
 
   const normalizedFile = pathname
@@ -101,9 +110,44 @@ const cleanupUploadedFile = async (filePath) => {
 
 // Get All Admins
 export const getAllAdmins = async (req, res) => {
-  const allAdmins = await AdminModel.find();
+  const { page, limit } = req.query;
+  const skip = (page - 1) * limit;
+  const [admins, totalAdmins] = await Promise.all([
+    AdminModel.find()
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    AdminModel.countDocuments(),
+  ]);
+  const totalPages = Math.ceil(totalAdmins / limit);
 
-  return res.status(200).json(allAdmins.map(sanitizeAdmin));
+  return res.status(200).json({
+    message: "Admins retrieved successfully",
+    admins: admins.map(sanitizeAdmin),
+    pagination: {
+      page,
+      limit,
+      totalAdmins,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    },
+  });
+};
+
+// Get Admin By ID
+export const getAdminById = async (req, res) => {
+  const admin = await AdminModel.findById(req.params.id).lean();
+
+  if (!admin) {
+    return res.status(404).json({ message: "Admin not found" });
+  }
+
+  return res.status(200).json({
+    message: "Admin retrieved successfully",
+    admin: sanitizeAdmin(admin),
+  });
 };
 
 // Add Admin
@@ -115,10 +159,7 @@ export const addAdmin = async (req, res) => {
     return res.status(409).json({ message: "Email already exists" });
   }
 
-  const hashedPassword = await bcrypt.hash(
-    password,
-    parseInt(process.env.SALT_ROUND, 10),
-  );
+  const hashedPassword = await bcrypt.hash(password, getSaltRounds());
 
   const newAdmin = new AdminModel({
     name,
@@ -157,7 +198,7 @@ export const updateAdminInfo = async (req, res) => {
   });
 
   if (Object.keys(updateData).length === 0) {
-    return res.status(400).json({ message : "No valid admin fields provided" });
+    return res.status(400).json({ message: "No valid admin fields provided" });
   }
 
   const adminToUpdate = await AdminModel.findById(adminId);
@@ -197,7 +238,7 @@ export const updateAdminInfo = async (req, res) => {
 
 // Update Admin Password
 export const updateAdminPassword = async (req, res) => {
-  const adminId = req.params.id;
+  const adminId = req.user._id;
   const { currentPassword, newPassword, confirmPassword } = req.body;
 
   if (!currentPassword || !newPassword || !confirmPassword) {
@@ -240,10 +281,7 @@ export const updateAdminPassword = async (req, res) => {
       .json({ message: "You cannot use your current password as new password" });
   }
 
-  adminToUpdate.password = await bcrypt.hash(
-    newPassword,
-    parseInt(process.env.SALT_ROUND, 10),
-  );
+  adminToUpdate.password = await bcrypt.hash(newPassword, getSaltRounds());
 
   await adminToUpdate.save();
 
@@ -256,12 +294,10 @@ export const updateAdminPassword = async (req, res) => {
 // Upload Admin Image
 export const uploadAdminImage = async (req, res) => {
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Image is required" });
+    return res.status(400).json({ message: "Image is required" });
   }
 
-  const adminId = req.params.id;
+  const adminId = req.user._id;
   const uploadedFilePath = req.file.path;
   const adminToUpdate = await AdminModel.findById(adminId);
 
@@ -303,7 +339,30 @@ export const deleteAdmin = async (req, res) => {
     return res.status(404).json({ message: "Admin not found" });
   }
 
-  await AdminModel.deleteOne({ _id: adminId });
+  if (adminToDelete._id.equals(req.user._id)) {
+    return res.status(409).json({
+      message: "You cannot delete your currently authenticated admin account",
+    });
+  }
 
-  return res.status(200).json({ message: "Admin has been deleted successfully." });
+  const adminCount = await AdminModel.countDocuments();
+
+  if (adminCount <= 1) {
+    return res.status(409).json({
+      message: "The last remaining admin cannot be deleted",
+    });
+  }
+
+  const imagePath = getSafeUploadedFilePath(adminToDelete.image_url, req);
+  const deletionResult = await AdminModel.deleteOne({ _id: adminId });
+
+  if (deletionResult.deletedCount === 0) {
+    return res.status(404).json({ message: "Admin not found" });
+  }
+
+  await cleanupUploadedFile(imagePath);
+
+  return res
+    .status(200)
+    .json({ message: "Admin has been deleted successfully." });
 };

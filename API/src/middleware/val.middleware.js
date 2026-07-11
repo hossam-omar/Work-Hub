@@ -74,9 +74,12 @@ export const validatePassword = (password) => {
 const valMiddleware = (Schema, options = {}) => {
   return (req, res, next) => {
     const validationErrors = [];
-    const data = options.includeParams
-      ? { ...req.params, ...req.body }
-      : { ...req.body };
+    const data =
+      options.source === "query"
+        ? { ...req.query }
+        : options.includeParams
+          ? { ...req.params, ...req.body }
+          : { ...req.body };
     const validationResult = Schema.validate(data, { abortEarly: false });
 
     if (validationResult.error) {
@@ -92,6 +95,12 @@ const valMiddleware = (Schema, options = {}) => {
     }
 
     if (options.assignValidatedData) {
+      if (options.source === "query") {
+        Object.keys(req.query).forEach((key) => delete req.query[key]);
+        Object.assign(req.query, validationResult.value);
+        return next();
+      }
+
       const paramKeys = new Set(Object.keys(req.params));
       req.body = Object.fromEntries(
         Object.entries(validationResult.value).filter(([key]) => {
