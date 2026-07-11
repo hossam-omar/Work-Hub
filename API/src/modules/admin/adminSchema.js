@@ -9,6 +9,11 @@ const adminPassword = Joi.string()
 const adminImageUrl = Joi.string().trim().max(2048);
 const adminActivityStatus = Joi.string().valid("online", "offline");
 
+export const getAdminsQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+}).unknown(false);
+
 export const createAdminSchema = Joi.object({
   name: adminName.required(),
   email: adminEmail.required(),
