@@ -3,12 +3,15 @@ import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import path from "path";
 import AdminModel from "../../../DB/models/admin_model.js";
+import ClientModel from "../../../DB/models/client_model.js";
+import FreelancerModel from "../../../DB/models/freelancer_model.js";
 import { validatePassword } from "../../middleware/val.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, "../../../uploads");
 const defaultSaltRounds = 10;
+let adminDeletionQueue = Promise.resolve();
 
 const adminResponseFields = [
   "_id",
@@ -46,9 +49,31 @@ const getSaltRounds = () => {
 
   return Number.isInteger(configuredRounds) &&
     configuredRounds >= 4 &&
-    configuredRounds <= 31
+    configuredRounds <= 15
     ? configuredRounds
     : defaultSaltRounds;
+};
+
+const emailBelongsToAnotherUser = async (email, excludedAdminId) => {
+  const adminFilter = { email };
+
+  if (excludedAdminId) {
+    adminFilter._id = { $ne: excludedAdminId };
+  }
+
+  const [admin, client, freelancer] = await Promise.all([
+    AdminModel.exists(adminFilter),
+    ClientModel.exists({ email }),
+    FreelancerModel.exists({ email }),
+  ]);
+
+  return Boolean(admin || client || freelancer);
+};
+
+const serializeAdminDeletion = (operation) => {
+  const deletion = adminDeletionQueue.then(operation);
+  adminDeletionQueue = deletion.catch(() => undefined);
+  return deletion;
 };
 
 const buildAdminImageUrl = (req, filename) => {
@@ -154,8 +179,7 @@ export const getAdminById = async (req, res) => {
 export const addAdmin = async (req, res) => {
   const { name, email, password, image_url, activityStatus } = req.body;
 
-  const admin = await AdminModel.findOne({ email });
-  if (admin) {
+  if (await emailBelongsToAnotherUser(email)) {
     return res.status(409).json({ message: "Email already exists" });
   }
 
@@ -208,12 +232,7 @@ export const updateAdminInfo = async (req, res) => {
   }
 
   if (updateData.email !== undefined) {
-    const existingAdmin = await AdminModel.findOne({
-      _id: { $ne: adminId },
-      email: updateData.email,
-    });
-
-    if (existingAdmin) {
+    if (await emailBelongsToAnotherUser(updateData.email, adminId)) {
       return res.status(409).json({ message: "Email already exists" });
     }
   }
@@ -299,70 +318,78 @@ export const uploadAdminImage = async (req, res) => {
 
   const adminId = req.user._id;
   const uploadedFilePath = req.file.path;
-  const adminToUpdate = await AdminModel.findById(adminId);
-
-  if (!adminToUpdate) {
-    await cleanupUploadedFile(uploadedFilePath);
-    return res.status(404).json({ message: "Admin not found" });
-  }
-
-  const previousImagePath = getSafeUploadedFilePath(
-    adminToUpdate.image_url,
-    req,
-  );
-  adminToUpdate.image_url = buildAdminImageUrl(req, req.file.filename);
+  let uploadSaved = false;
 
   try {
+    const adminToUpdate = await AdminModel.findById(adminId);
+
+    if (!adminToUpdate) {
+      await cleanupUploadedFile(uploadedFilePath);
+      return res.status(404).json({ message: "Admin not found" });
+    }
+
+    const previousImagePath = getSafeUploadedFilePath(
+      adminToUpdate.image_url,
+      req,
+    );
+    adminToUpdate.image_url = buildAdminImageUrl(req, req.file.filename);
     await adminToUpdate.save();
+    uploadSaved = true;
+
+    if (previousImagePath && previousImagePath !== uploadedFilePath) {
+      await cleanupUploadedFile(previousImagePath);
+    }
+
+    return res.status(200).json({
+      message: "Image uploaded successfully",
+      admin: sanitizeAdmin(adminToUpdate),
+      image_url: adminToUpdate.image_url,
+    });
   } catch (error) {
-    await cleanupUploadedFile(uploadedFilePath);
+    if (!uploadSaved) {
+      await cleanupUploadedFile(uploadedFilePath);
+    }
+
     throw error;
   }
-
-  if (previousImagePath && previousImagePath !== uploadedFilePath) {
-    await cleanupUploadedFile(previousImagePath);
-  }
-
-  return res.status(200).json({
-    message: "Image uploaded successfully",
-    admin: sanitizeAdmin(adminToUpdate),
-    image_url: adminToUpdate.image_url,
-  });
 };
 
 // Delete Admin
 export const deleteAdmin = async (req, res) => {
   const adminId = req.params.id;
-  const adminToDelete = await AdminModel.findById(adminId);
 
-  if (!adminToDelete) {
-    return res.status(404).json({ message: "Admin not found" });
-  }
+  return serializeAdminDeletion(async () => {
+    const adminToDelete = await AdminModel.findById(adminId);
 
-  if (adminToDelete._id.equals(req.user._id)) {
-    return res.status(409).json({
-      message: "You cannot delete your currently authenticated admin account",
-    });
-  }
+    if (!adminToDelete) {
+      return res.status(404).json({ message: "Admin not found" });
+    }
 
-  const adminCount = await AdminModel.countDocuments();
+    if (adminToDelete._id.equals(req.user._id)) {
+      return res.status(409).json({
+        message: "You cannot delete your currently authenticated admin account",
+      });
+    }
 
-  if (adminCount <= 1) {
-    return res.status(409).json({
-      message: "The last remaining admin cannot be deleted",
-    });
-  }
+    const adminCount = await AdminModel.countDocuments();
 
-  const imagePath = getSafeUploadedFilePath(adminToDelete.image_url, req);
-  const deletionResult = await AdminModel.deleteOne({ _id: adminId });
+    if (adminCount <= 1) {
+      return res.status(409).json({
+        message: "The last remaining admin cannot be deleted",
+      });
+    }
 
-  if (deletionResult.deletedCount === 0) {
-    return res.status(404).json({ message: "Admin not found" });
-  }
+    const imagePath = getSafeUploadedFilePath(adminToDelete.image_url, req);
+    const deletionResult = await AdminModel.deleteOne({ _id: adminId });
 
-  await cleanupUploadedFile(imagePath);
+    if (deletionResult.deletedCount === 0) {
+      return res.status(404).json({ message: "Admin not found" });
+    }
 
-  return res
-    .status(200)
-    .json({ message: "Admin has been deleted successfully." });
+    await cleanupUploadedFile(imagePath);
+
+    return res
+      .status(200)
+      .json({ message: "Admin has been deleted successfully." });
+  });
 };

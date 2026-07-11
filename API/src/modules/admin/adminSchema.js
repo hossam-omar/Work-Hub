@@ -2,9 +2,15 @@ import Joi from "joi";
 
 const adminName = Joi.string().trim().max(100);
 const adminEmail = Joi.string().trim().lowercase().max(254).email();
+const enforceBcryptByteLimit = (value, helpers) => {
+  if (Buffer.byteLength(value, "utf8") <= 72) return value;
+
+  return helpers.message("Password must not exceed 72 bytes");
+};
 const adminPassword = Joi.string()
   .min(8)
   .max(128)
+  .custom(enforceBcryptByteLimit)
   .pattern(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\S+$).{8,}$/);
 const adminImageUrl = Joi.string().trim().max(2048);
 const adminActivityStatus = Joi.string().valid("online", "offline");
