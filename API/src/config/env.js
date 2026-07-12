@@ -12,7 +12,7 @@ const requireNonEmptyEnv = (name) => {
   return value;
 };
 
-const validateOptionalPositiveIntegerEnv = (name) => {
+const validateOptionalIntegerRangeEnv = (name, minValue, maxValue) => {
   const value = process.env[name];
 
   if (value === undefined || value === null || value === "") return;
@@ -21,15 +21,18 @@ const validateOptionalPositiveIntegerEnv = (name) => {
 
   if (
     !Number.isInteger(parsedValue) ||
-    parsedValue <= 0 ||
+    parsedValue < minValue ||
+    parsedValue > maxValue ||
     String(parsedValue) !== value.trim()
   ) {
-    throw new Error(`${name} must be a positive integer when provided`);
+    throw new Error(
+      `${name} must be an integer from ${minValue} to ${maxValue} when provided`,
+    );
   }
 };
 
 requireNonEmptyEnv("TOKEN_SECRETkEY");
-validateOptionalPositiveIntegerEnv("SALT_ROUND");
+validateOptionalIntegerRangeEnv("SALT_ROUND", 4, 15);
 
 export const env = {
   port: process.env.PORT || 3000,
