@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { getSaltRounds } from "./saltRounds.js";
 
 dotenv.config();
 
@@ -12,27 +13,8 @@ const requireNonEmptyEnv = (name) => {
   return value;
 };
 
-const validateOptionalIntegerRangeEnv = (name, minValue, maxValue) => {
-  const value = process.env[name];
-
-  if (value === undefined || value === null || value === "") return;
-
-  const parsedValue = Number.parseInt(value, 10);
-
-  if (
-    !Number.isInteger(parsedValue) ||
-    parsedValue < minValue ||
-    parsedValue > maxValue ||
-    String(parsedValue) !== value.trim()
-  ) {
-    throw new Error(
-      `${name} must be an integer from ${minValue} to ${maxValue} when provided`,
-    );
-  }
-};
-
 requireNonEmptyEnv("TOKEN_SECRETkEY");
-validateOptionalIntegerRangeEnv("SALT_ROUND", 4, 15);
+getSaltRounds();
 
 export const env = {
   port: process.env.PORT || 3000,

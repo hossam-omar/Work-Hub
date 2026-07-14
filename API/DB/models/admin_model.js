@@ -44,6 +44,13 @@ const adminSchema = new Schema(
       enum: ["admin"],
       required: false,
     },
+    bootstrapKey: {
+      type: String,
+      enum: ["initial-admin"],
+      required: false,
+      immutable: true,
+      select: false,
+    },
     token: {
       type: String,
       required: false,
@@ -56,5 +63,9 @@ const adminSchema = new Schema(
 );
 
 adminSchema.index({ createdAt: -1, _id: -1 });
+adminSchema.index(
+  { bootstrapKey: 1 },
+  { unique: true, sparse: true, name: "unique_initial_admin_bootstrap" },
+);
 
 export default mongoose.model("admin", adminSchema);

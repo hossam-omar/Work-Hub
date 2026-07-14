@@ -6,11 +6,11 @@ import AdminModel from "../../../DB/models/admin_model.js";
 import ClientModel from "../../../DB/models/client_model.js";
 import FreelancerModel from "../../../DB/models/freelancer_model.js";
 import { validatePassword } from "../../middleware/val.middleware.js";
+import { getSaltRounds } from "../../config/saltRounds.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, "../../../uploads");
-const defaultSaltRounds = 10;
 let adminDeletionQueue = Promise.resolve();
 
 const adminResponseFields = [
@@ -42,16 +42,6 @@ const isDuplicateEmailError = (error) => {
     error?.code === 11000 &&
     (error?.keyPattern?.email || error?.keyValue?.email)
   );
-};
-
-const getSaltRounds = () => {
-  const configuredRounds = Number(process.env.SALT_ROUND);
-
-  return Number.isInteger(configuredRounds) &&
-    configuredRounds >= 4 &&
-    configuredRounds <= 15
-    ? configuredRounds
-    : defaultSaltRounds;
 };
 
 const emailBelongsToAnotherUser = async (email, excludedAdminId) => {

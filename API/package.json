@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "nodemon server.js",
+    "test": "node --test",
+    "admin:bootstrap": "node scripts/bootstrapAdmin.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
