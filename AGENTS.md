@@ -34,9 +34,9 @@ The current active backend still uses MongoDB/Mongoose. Prisma/PostgreSQL work s
 
 ## Git Rules
 
-- Do not push directly to `main`.
-- Use feature branches.
-- Do not commit unless explicitly asked.
+- Work on feature branches; never commit or push directly to `main`.
+- After completing and successfully testing or validating an approved task, Codex may stage the relevant files and create a focused local commit automatically, but only on a feature branch.
+- Ask for the user's explicit approval before pushing any branch, merging, opening a pull request, modifying GitHub Issues or pull requests, or performing destructive Git operations.
 - Do not run `git add .`.
 - Stage only files relevant to the approved task.
 - Keep commits small and focused.
@@ -76,3 +76,17 @@ The current active backend still uses MongoDB/Mongoose. Prisma/PostgreSQL work s
 - Document current behavior separately from planned/in-progress migration work.
 - Update `API/.env.example` when adding environment variables.
 - Mention legacy code clearly when relevant.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for this repository. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context domain-doc layout. See `docs/agents/domain.md`.
