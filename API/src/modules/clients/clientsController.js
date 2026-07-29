@@ -4,31 +4,33 @@ import bcrypt from "bcryptjs";
 import { validatePassword } from "../../middleware/val.middleware.js";
 import ClientModel from "../../../DB/models/client_model.js"
 import mongoose from "mongoose";
+import { ClientError } from "./clientErrors.js";
+import { clientOperations } from "./clientsOperations.js";
+import { parsePublicClientListQuery } from "./clientsSchema.js";
 
 
-// Get All Clients
-export const getAllClients = async (req, res) => {
+export const createListPublicProfilesController = ({
+  operations = clientOperations,
+  logger = console,
+} = {}) => {
+  return async (req, res) => {
     try {
-        var allClients = await client.find();
+      const pagination = parsePublicClientListQuery(req.query);
+      const result = await operations.listPublicProfiles(pagination);
 
-        if(!allClients[0]) {
-          return res.status(404).json({ msg:"No clients found!"});
-        }
-
-        const modifiedClients = allClients.map((client) => {
-          const modifiedClient = { ...client._doc }; // Create a copy of the service object
-          modifiedClient.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedClient.image_url;
-          return modifiedClient;
-        });
-
-        allClients = modifiedClients;
-
-        res.status(200).json(allClients);
+      return res.status(200).json(result);
     } catch (error) {
-        console.log(error);
-        res.status(500).send("Somthing went wrong!");
+      if (error instanceof ClientError) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
+
+      logger.error("Failed to list public Client Profiles.", error);
+      return res.status(500).json({ message: "Internal server error." });
     }
-}
+  };
+};
+
+export const listPublicProfiles = createListPublicProfilesController();
 
 export const getClientById = async (req, res, next) => {
     try {
