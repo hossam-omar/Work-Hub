@@ -54,4 +54,6 @@ const clientSchema = new Schema(
   },
 );
 
+clientSchema.index({ createdAt: -1, _id: -1 });
+
 export default mongoose.model("client", clientSchema);

@@ -1,5 +1,58 @@
 
 import Joi from "joi";
+import {
+  invalidClientPagination,
+  invalidClientRequest,
+} from "./clientErrors.js";
+
+const positiveIntegerQueryValue = Joi.string().pattern(/^\d+$/);
+const publicClientListQueryShape = {
+  page: positiveIntegerQueryValue.optional(),
+  limit: positiveIntegerQueryValue.optional(),
+};
+const publicClientListQueryFields = new Set(
+  Object.keys(publicClientListQueryShape),
+);
+
+export const publicClientListQuerySchema = Joi.object(
+  publicClientListQueryShape,
+).unknown(false);
+
+export const parsePublicClientListQuery = (query = {}) => {
+  const hasUnknownField = Object.keys(query).some((field) => {
+    return !publicClientListQueryFields.has(field);
+  });
+
+  if (hasUnknownField) {
+    throw invalidClientRequest();
+  }
+
+  const validationResult = publicClientListQuerySchema.validate(query, {
+    abortEarly: false,
+    convert: false,
+  });
+
+  if (validationResult.error) {
+    throw invalidClientPagination();
+  }
+
+  const page = query.page === undefined ? 1 : Number(query.page);
+  const limit = query.limit === undefined ? 20 : Number(query.limit);
+  const skip = (page - 1) * limit;
+
+  if (
+    !Number.isSafeInteger(page) ||
+    page < 1 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 100 ||
+    !Number.isSafeInteger(skip)
+  ) {
+    throw invalidClientPagination();
+  }
+
+  return { page, limit };
+};
 
 export const clientSchema = Joi.object({
     clientName: Joi.string().required(),
