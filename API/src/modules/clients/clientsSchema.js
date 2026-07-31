@@ -1,10 +1,12 @@
 
 import Joi from "joi";
 import {
+  invalidClientId,
   invalidClientPagination,
   invalidClientRequest,
 } from "./clientErrors.js";
 
+const objectIdPattern = /^[0-9a-fA-F]{24}$/;
 const positiveIntegerQueryValue = Joi.string().pattern(/^\d+$/);
 const publicClientListQueryShape = {
   page: positiveIntegerQueryValue.optional(),
@@ -52,6 +54,28 @@ export const parsePublicClientListQuery = (query = {}) => {
   }
 
   return { page, limit };
+};
+
+export const parsePublicClientLookupRequest = ({
+  params = {},
+  query = {},
+} = {}) => {
+  if (
+    Object.keys(params).length !== 1 ||
+    !Object.hasOwn(params, "id") ||
+    Object.keys(query).length !== 0
+  ) {
+    throw invalidClientRequest();
+  }
+
+  if (
+    typeof params.id !== "string" ||
+    !objectIdPattern.test(params.id)
+  ) {
+    throw invalidClientId();
+  }
+
+  return params.id;
 };
 
 export const clientSchema = Joi.object({

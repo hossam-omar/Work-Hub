@@ -3,11 +3,23 @@ import client from "../../../DB/models/client_model.js";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "../../middleware/val.middleware.js";
 import ClientModel from "../../../DB/models/client_model.js"
-import mongoose from "mongoose";
 import { ClientError } from "./clientErrors.js";
 import { clientOperations } from "./clientsOperations.js";
 import { parsePublicClientListQuery } from "./clientsSchema.js";
 
+export const respondToClientError = ({
+  error,
+  res,
+  logger = console,
+  operation,
+}) => {
+  if (error instanceof ClientError) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+
+  logger.error(operation, error);
+  return res.status(500).json({ message: "Internal server error." });
+};
 
 export const createListPublicProfilesController = ({
   operations = clientOperations,
@@ -20,41 +32,40 @@ export const createListPublicProfilesController = ({
 
       return res.status(200).json(result);
     } catch (error) {
-      if (error instanceof ClientError) {
-        return res.status(error.statusCode).json({ message: error.message });
-      }
-
-      logger.error("Failed to list public Client Profiles.", error);
-      return res.status(500).json({ message: "Internal server error." });
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to list public Client Profiles.",
+      });
     }
   };
 };
 
 export const listPublicProfiles = createListPublicProfilesController();
 
-export const getClientById = async (req, res, next) => {
+export const createGetPublicProfileByIdController = ({
+  operations = clientOperations,
+  logger = console,
+} = {}) => {
+  return async (req, res) => {
     try {
-      const { id } = req.params;
-  
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(404).send({ success: false, message: "Invalid id" });
-    }
-  
-    const client = await ClientModel.findById(id);
-  
-    if (!client) {
-      res.status(404).json({msg: "Freelancer not found"});
-    }
-  
-    client.image_url = "http://" + req.hostname + ":3000/uploads/" + client.image_url;
-    client.coverImage_url = "http://" + req.hostname + ":3000/uploads/" + client.coverImage_url;
-    
-    res.status(200).json({ client });
+      const id = res.locals.publicClientProfileId;
+      const client = await operations.getPublicProfileById(id);
+
+      return res.status(200).json({ client });
     } catch (error) {
-      console.log(error);
-      res.status(500).json({msg: "Internal Server Error"});
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to get public Client Profile.",
+      });
     }
+  };
 };
+
+export const getPublicProfileById = createGetPublicProfileByIdController();
   
 // Update Client Info
 export const updateClientInfo = async (req, res) => {
