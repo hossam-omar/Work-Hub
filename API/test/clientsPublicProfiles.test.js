@@ -2,9 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createClientsRouter } from "../src/modules/clients/clientsRoutes.js";
-import { createListPublicProfilesController } from "../src/modules/clients/clientsController.js";
+import {
+  createGetPublicProfileByIdController,
+  createListPublicProfilesController,
+} from "../src/modules/clients/clientsController.js";
 import { createClientOperations } from "../src/modules/clients/clientsOperations.js";
 import ClientModel from "../DB/models/client_model.js";
+
+const publicClientId = "507f1f77bcf86cd799439011";
 
 const withTestServer = async (router, operation) => {
   const app = express();
@@ -62,6 +67,140 @@ test("public Client Profile list uses the confirmed pagination defaults", async 
   assert.deepEqual(calls, [{ page: 1, limit: 20 }]);
 });
 
+test("public Client Profile lookup uses the confirmed unauthenticated route", async () => {
+  const calls = [];
+  const expectedResponse = {
+    client: {
+      id: publicClientId,
+      name: "Hossam",
+      imageUrl: "/uploads/avatar.jpg",
+      coverImageUrl: null,
+      country: "Egypt",
+    },
+  };
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: (req, res) => {
+      calls.push({
+        id: res.locals.publicClientProfileId,
+        params: req.params,
+        query: req.query,
+      });
+      return res.status(200).json(expectedResponse);
+    },
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/${publicClientId}`,
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), expectedResponse);
+  });
+
+  assert.deepEqual(calls, [
+    {
+      id: publicClientId,
+      params: { id: publicClientId },
+      query: {},
+    },
+  ]);
+});
+
+test("public Client Profile lookup returns the exact Client Operations result", async () => {
+  const calls = [];
+  const uppercaseClientId = publicClientId.toUpperCase();
+  const publicProfile = {
+    id: publicClientId,
+    name: "Hossam",
+    imageUrl: "/uploads/avatar.jpg",
+    coverImageUrl: null,
+    country: "Egypt",
+  };
+  const controller = createGetPublicProfileByIdController({
+    operations: {
+      getPublicProfileById: async (id) => {
+        calls.push(id);
+        return publicProfile;
+      },
+    },
+    logger: { error: () => undefined },
+  });
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: controller,
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/${uppercaseClientId}`,
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { client: publicProfile });
+  });
+
+  assert.deepEqual(calls, [uppercaseClientId]);
+});
+
+test("public Client Profile lookup rejects a malformed ObjectId", async () => {
+  const controller = createGetPublicProfileByIdController({
+    operations: {
+      getPublicProfileById: async () => {
+        throw new Error("invalid id reached Client Operations");
+      },
+    },
+    logger: { error: () => undefined },
+  });
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: controller,
+  });
+
+  const malformedIds = [
+    "not-an-object-id",
+    "g".repeat(24),
+    publicClientId.slice(1),
+    `${publicClientId}00`,
+  ];
+
+  await withTestServer(router, async (baseUrl) => {
+    for (const id of malformedIds) {
+      const response = await fetch(`${baseUrl}/api/v1/clients/${id}`);
+
+      assert.equal(response.status, 400, id);
+      assert.deepEqual(
+        await response.json(),
+        { message: "Client id must be a valid ObjectId." },
+        id,
+      );
+    }
+  });
+});
+
+test("public Client Profile lookup rejects unknown query parameters", async () => {
+  const controller = createGetPublicProfileByIdController({
+    operations: {
+      getPublicProfileById: async () => {
+        throw new Error("invalid query reached Client Operations");
+      },
+    },
+    logger: { error: () => undefined },
+  });
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: controller,
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/${publicClientId}?include=email`,
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      message: "Invalid request.",
+    });
+  });
+});
+
 const createClientModelAdapter = ({ clients = [], totalClients = 0 } = {}) => {
   const calls = {
     find: [],
@@ -97,6 +236,27 @@ const createClientModelAdapter = ({ clients = [], totalClients = 0 } = {}) => {
     async countDocuments() {
       calls.countDocuments += 1;
       return totalClients;
+    },
+  };
+
+  return { calls, clientModel };
+};
+
+const createClientLookupModelAdapter = ({ client = null } = {}) => {
+  const calls = {
+    findById: [],
+    lean: 0,
+  };
+  const clientModel = {
+    findById(id, projection) {
+      calls.findById.push({ id, projection });
+
+      return {
+        async lean() {
+          calls.lean += 1;
+          return client;
+        },
+      };
     },
   };
 
@@ -163,6 +323,73 @@ test("Client Operations applies the bounded deterministic public Client Profile 
       hasNextPage: true,
       hasPreviousPage: true,
     },
+  });
+});
+
+test("Client Operations returns the exact public Client Profile for an uppercase ObjectId", async () => {
+  const uppercaseClientId = publicClientId.toUpperCase();
+  const { calls, clientModel } = createClientLookupModelAdapter({
+    client: {
+      _id: publicClientId,
+      name: "Hossam",
+      email: "private@example.com",
+      password: "private-hash",
+      token: "private-token",
+      image_url: "https://legacy.example/uploads/avatar.jpg",
+      coverImage_url: "C:\\private\\cover.png",
+      country: "Egypt",
+      role: "client",
+      futurePrivateField: "must-not-leak",
+    },
+  });
+  const operations = createClientOperations({ clientModel });
+
+  const result = await operations.getPublicProfileById(uppercaseClientId);
+
+  assert.deepEqual(calls, {
+    findById: [
+      {
+        id: uppercaseClientId,
+        projection: {
+          _id: 1,
+          name: 1,
+          image_url: 1,
+          coverImage_url: 1,
+          country: 1,
+        },
+      },
+    ],
+    lean: 1,
+  });
+  assert.deepEqual(result, {
+    id: publicClientId,
+    name: "Hossam",
+    imageUrl: "/uploads/avatar.jpg",
+    coverImageUrl: null,
+    country: "Egypt",
+  });
+});
+
+test("public Client Profile lookup returns the exact missing-profile response", async () => {
+  const { clientModel } = createClientLookupModelAdapter();
+  const operations = createClientOperations({ clientModel });
+  const controller = createGetPublicProfileByIdController({
+    operations,
+    logger: { error: () => undefined },
+  });
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: controller,
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/${publicClientId}`,
+    );
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      message: "Client profile not found.",
+    });
   });
 });
 
@@ -417,6 +644,40 @@ test("unexpected Client Profile list failures use the exact generic response", a
   assert.equal(loggedErrors[0][1], databaseError);
 });
 
+test("unexpected Client Profile lookup failures use the exact generic response", async () => {
+  const loggedErrors = [];
+  const databaseError = new Error("private MongoDB lookup failure");
+  const controller = createGetPublicProfileByIdController({
+    operations: {
+      getPublicProfileById: async () => {
+        throw databaseError;
+      },
+    },
+    logger: {
+      error: (...values) => {
+        loggedErrors.push(values);
+      },
+    },
+  });
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: controller,
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/${publicClientId}`,
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(body, { message: "Internal server error." });
+    assert.equal(Object.hasOwn(body, "stack"), false);
+  });
+
+  assert.equal(loggedErrors.length, 1);
+  assert.equal(loggedErrors[0][1], databaseError);
+});
+
 test("Client model declares the deterministic public-list index", () => {
   const publicListIndex = ClientModel.schema.indexes().find(([fields]) => {
     return fields.createdAt === -1 && fields._id === -1;
@@ -425,7 +686,7 @@ test("Client model declares the deterministic public-list index", () => {
   assert.ok(publicListIndex);
 });
 
-test("the legacy public Client list route is removed", async () => {
+test("the legacy public Client list handler remains removed", async () => {
   const router = createClientsRouter({
     listPublicProfilesHandler: (_req, res) => {
       return res.status(200).json({ unexpected: true });
@@ -435,6 +696,25 @@ test("the legacy public Client list route is removed", async () => {
   await withTestServer(router, async (baseUrl) => {
     const response = await fetch(
       `${baseUrl}/api/v1/clients/getAllClients`,
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      message: "Client id must be a valid ObjectId.",
+    });
+  });
+});
+
+test("the legacy public Client Profile detail route is removed", async () => {
+  const router = createClientsRouter({
+    getPublicProfileByIdHandler: (_req, res) => {
+      return res.status(200).json({ unexpected: true });
+    },
+  });
+
+  await withTestServer(router, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/v1/clients/getClientById/${publicClientId}`,
     );
 
     assert.equal(response.status, 404);

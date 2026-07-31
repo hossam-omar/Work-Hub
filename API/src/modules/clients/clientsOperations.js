@@ -1,4 +1,5 @@
 import ClientModel from "../../../DB/models/client_model.js";
+import { clientProfileNotFound } from "./clientErrors.js";
 import {
   publicClientProfileProjection,
   toPublicClientProfile,
@@ -13,6 +14,17 @@ export const createClientOperations = ({
   clientModel = ClientModel,
 } = {}) => {
   return {
+    getPublicProfileById: async (id) => {
+      const client = await clientModel
+        .findById(id, publicClientProfileProjection)
+        .lean();
+
+      if (!client) {
+        throw clientProfileNotFound();
+      }
+
+      return toPublicClientProfile(client);
+    },
     listPublicProfiles: async ({ page, limit }) => {
       const skip = (page - 1) * limit;
       const [clients, totalClients] = await Promise.all([

@@ -18,3 +18,19 @@ export const invalidClientPagination = () => {
     "Invalid pagination parameters.",
   );
 };
+
+export const invalidClientId = () => {
+  return new ClientError(
+    "INVALID_CLIENT_ID",
+    400,
+    "Client id must be a valid ObjectId.",
+  );
+};
+
+export const clientProfileNotFound = () => {
+  return new ClientError(
+    "CLIENT_PROFILE_NOT_FOUND",
+    404,
+    "Client profile not found.",
+  );
+};
