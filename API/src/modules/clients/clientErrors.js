@@ -34,3 +34,59 @@ export const clientProfileNotFound = () => {
     "Client profile not found.",
   );
 };
+
+export const unsupportedClientMediaType = () => {
+  return new ClientError(
+    "UNSUPPORTED_MEDIA_TYPE",
+    415,
+    "Unsupported media type.",
+  );
+};
+
+export const clientPasswordConfirmationMismatch = () => {
+  return new ClientError(
+    "PASSWORD_CONFIRMATION_MISMATCH",
+    400,
+    "Password confirmation does not match.",
+  );
+};
+
+export const invalidNewClientPassword = () => {
+  return new ClientError(
+    "INVALID_NEW_PASSWORD",
+    400,
+    "New password does not meet requirements.",
+  );
+};
+
+export const incorrectCurrentClientPassword = () => {
+  return new ClientError(
+    "INCORRECT_CURRENT_PASSWORD",
+    400,
+    "Current password is incorrect.",
+  );
+};
+
+export const reusedCurrentClientPassword = () => {
+  return new ClientError(
+    "REUSED_CURRENT_PASSWORD",
+    400,
+    "New password must be different from current password.",
+  );
+};
+
+export const clientAccountNotFound = () => {
+  return new ClientError(
+    "CLIENT_ACCOUNT_NOT_FOUND",
+    404,
+    "Client account not found.",
+  );
+};
+
+export const clientPasswordChangeConflict = () => {
+  return new ClientError(
+    "PASSWORD_CHANGE_CONFLICT",
+    409,
+    "Password was changed by another request. Please sign in again.",
+  );
+};

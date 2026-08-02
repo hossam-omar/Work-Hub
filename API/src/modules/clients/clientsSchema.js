@@ -1,12 +1,21 @@
 
 import Joi from "joi";
+import { validatePassword } from "../../middleware/val.middleware.js";
 import {
+  clientPasswordConfirmationMismatch,
   invalidClientId,
   invalidClientPagination,
   invalidClientRequest,
+  invalidNewClientPassword,
 } from "./clientErrors.js";
 
 const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+const clientPasswordFields = [
+  "currentPassword",
+  "newPassword",
+  "confirmPassword",
+];
+const clientPasswordFieldSet = new Set(clientPasswordFields);
 const positiveIntegerQueryValue = Joi.string().pattern(/^\d+$/);
 const publicClientListQueryShape = {
   page: positiveIntegerQueryValue.optional(),
@@ -76,6 +85,42 @@ export const parsePublicClientLookupRequest = ({
   }
 
   return params.id;
+};
+
+export const parseClientPasswordRequest = ({
+  body,
+  params = {},
+  query = {},
+} = {}) => {
+  const bodyIsObject =
+    body !== null && typeof body === "object" && !Array.isArray(body);
+  const bodyFields = bodyIsObject ? Object.keys(body) : [];
+  const hasExactBodyFields =
+    bodyFields.length === clientPasswordFields.length &&
+    bodyFields.every((field) => clientPasswordFieldSet.has(field));
+  const allValuesAreStrings =
+    hasExactBodyFields &&
+    clientPasswordFields.every((field) => typeof body[field] === "string");
+
+  if (
+    Object.keys(params).length !== 0 ||
+    Object.keys(query).length !== 0 ||
+    !allValuesAreStrings
+  ) {
+    throw invalidClientRequest();
+  }
+
+  if (body.confirmPassword !== body.newPassword) {
+    throw clientPasswordConfirmationMismatch();
+  }
+
+  if (!validatePassword(body.newPassword)) {
+    throw invalidNewClientPassword();
+  }
+
+  return Object.fromEntries(
+    clientPasswordFields.map((field) => [field, body[field]]),
+  );
 };
 
 export const clientSchema = Joi.object({

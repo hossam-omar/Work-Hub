@@ -1,7 +1,5 @@
 
 import client from "../../../DB/models/client_model.js";
-import bcrypt from "bcryptjs";
-import { validatePassword } from "../../middleware/val.middleware.js";
 import ClientModel from "../../../DB/models/client_model.js"
 import { ClientError } from "./clientErrors.js";
 import { clientOperations } from "./clientsOperations.js";
@@ -12,12 +10,17 @@ export const respondToClientError = ({
   res,
   logger = console,
   operation,
+  redactErrorDetails = false,
 }) => {
   if (error instanceof ClientError) {
     return res.status(error.statusCode).json({ message: error.message });
   }
 
-  logger.error(operation, error);
+  const loggedError = redactErrorDetails
+    ? { name: error?.name, code: error?.code }
+    : error;
+
+  logger.error(operation, loggedError);
   return res.status(500).json({ message: "Internal server error." });
 };
 
@@ -66,6 +69,39 @@ export const createGetPublicProfileByIdController = ({
 };
 
 export const getPublicProfileById = createGetPublicProfileByIdController();
+
+export const createChangeClientPasswordController = ({
+  operations = clientOperations,
+  logger = console,
+} = {}) => {
+  return async (req, res) => {
+    try {
+      const { currentPassword, newPassword } =
+        res.locals.clientPasswordChange;
+
+      await operations.changePassword({
+        clientId: req.user._id,
+        currentPassword,
+        newPassword,
+      });
+
+      return res.status(200).json({
+        message: "Password updated successfully. Please sign in again.",
+      });
+    } catch (error) {
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to change Client password.",
+        redactErrorDetails: true,
+      });
+    }
+  };
+};
+
+export const changeClientPassword =
+  createChangeClientPasswordController();
   
 // Update Client Info
 export const updateClientInfo = async (req, res) => {
@@ -110,49 +146,6 @@ export const updateClientInfo = async (req, res) => {
     }
 }
   
-// Update Client Password
-export const updateClientPassword = async (req, res) => {
-    try {
-        const clientId = req.params.id;
-        const clientToUpdate = await ClientModel.findById(clientId);
-
-  
-        if (clientToUpdate) {
-          const passwordInput = req.body.password;
-          const clientPassword = clientToUpdate.password;
-          const match = await bcrypt.compare(passwordInput, clientPassword);
-  
-          if (match) {
-            const newPassword = req.body.newPassword;
-            const confirmNewPassword = req.body.confirmNewPassword;
-            const newMatch = await bcrypt.compare(newPassword, clientPassword);
-  
-            if (!newMatch) {
-              if (newPassword === confirmNewPassword) {
-                if (validatePassword(newPassword)) {
-                  const filter = { _id: clientId };
-                  const newPasswordHash = bcrypt.hashSync(newPassword, parseInt(process.env.SALT_ROUND));
-  
-                  const update = { $set: { password: newPasswordHash, token: "null" } };
-  
-                  await ClientModel.updateOne(filter, update);
-                  return res.status(200).json({ msg:"Client has been updated successfuly." });
-                }
-                return res.status(400).json({ msg: "Password is not valid. Please follow the password pattern." });
-              }
-              return res.status(400).json({ msg: "Passwords don't match." });
-            }
-            return res.status(400).json({ msg: "You cannot use your current password as new password." });
-          }
-          return res.status(400).json({ msg: "Wrong password." });
-        }
-        res.status(200).json({ msg: "There is no Client with such id to update." });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ msg: "Somthing went wrong!" });
-    }
-}
-
 // Delete Client
 export const deleteClient = async (req, res) => {
     try {
