@@ -1,6 +1,5 @@
 
 import client from "../../../DB/models/client_model.js";
-import ClientModel from "../../../DB/models/client_model.js"
 import { ClientError } from "./clientErrors.js";
 import { clientOperations } from "./clientsOperations.js";
 import { parsePublicClientListQuery } from "./clientsSchema.js";
@@ -102,49 +101,35 @@ export const createChangeClientPasswordController = ({
 
 export const changeClientPassword =
   createChangeClientPasswordController();
-  
-// Update Client Info
-export const updateClientInfo = async (req, res) => {
-    try {
-  
-        let update;
-        console.log(req);
-        if(!req.file) {
-          update = { $set: { name: req.body.name, email: req.body.email } }
-        }
-        else {
-          update = { $set: { name: req.body.name, email: req.body.email, image_url: req.file.filename } }
-        }
-  
-        const clientId = req.params.id;
-        console.log(clientId);
-        const clientToUpdate = await ClientModel.findById(clientId);
-  
-        if(clientToUpdate) {
-            const clientEmail = {email: req.body.email};
-            const clientData = await ClientModel.find(clientEmail);
-            console.log(clientData);
-  
-            let condition = clientData.length === 0;
-  
-            if(!condition) {
-                condition = clientData[0].email === req.body.email;
-            }
-  
-            if(condition) {
-                const filter = { _id: clientId };
 
-                await ClientModel.updateOne(filter, update);
-                return res.status(200).json({ msg: "Client has been updated successfuly." });
-            }
-            return res.status(400).json({ msg: "You cannot use this email." });
-        }
-        res.status(200).json({ msg: "There is no Client with such id to update." });
+export const createUpdateClientProfileController = ({
+  operations = clientOperations,
+  logger = console,
+} = {}) => {
+  return async (req, res) => {
+    try {
+      const client = await operations.updateProfile({
+        clientId: req.user._id,
+        updates: res.locals.clientProfileUpdate,
+      });
+
+      return res.status(200).json({
+        message: "Client profile updated successfully.",
+        client,
+      });
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ msg: "Somthing went wrong!" });
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to update Client profile.",
+      });
     }
-}
+  };
+};
+
+export const updateClientProfile =
+  createUpdateClientProfileController();
   
 // Delete Client
 export const deleteClient = async (req, res) => {

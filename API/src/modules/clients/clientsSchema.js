@@ -5,6 +5,7 @@ import {
   clientPasswordConfirmationMismatch,
   invalidClientId,
   invalidClientPagination,
+  invalidClientProfileValues,
   invalidClientRequest,
   invalidNewClientPassword,
 } from "./clientErrors.js";
@@ -16,6 +17,17 @@ const clientPasswordFields = [
   "confirmPassword",
 ];
 const clientPasswordFieldSet = new Set(clientPasswordFields);
+const clientProfileUpdateFields = ["name", "email"];
+const clientProfileUpdateFieldSet = new Set(clientProfileUpdateFields);
+const clientProfileValidationMessages = Object.freeze({
+  name: "Name must be between 2 and 100 characters.",
+  email: "Email must be a valid email address.",
+});
+const clientProfileEmailSchema = Joi.string()
+  .trim()
+  .lowercase()
+  .max(254)
+  .email({ tlds: { allow: false } });
 const positiveIntegerQueryValue = Joi.string().pattern(/^\d+$/);
 const publicClientListQueryShape = {
   page: positiveIntegerQueryValue.optional(),
@@ -24,6 +36,34 @@ const publicClientListQueryShape = {
 const publicClientListQueryFields = new Set(
   Object.keys(publicClientListQueryShape),
 );
+
+const assertClientMutationRequestStructure = ({
+  allowedFields,
+  body,
+  maximumFieldCount,
+  minimumFieldCount,
+  params,
+  query,
+}) => {
+  const bodyIsObject =
+    body !== null && typeof body === "object" && !Array.isArray(body);
+  const bodyFields = bodyIsObject ? Object.keys(body) : [];
+  const hasValidFieldCount =
+    bodyFields.length >= minimumFieldCount &&
+    bodyFields.length <= maximumFieldCount;
+  const hasOnlyAllowedFields =
+    hasValidFieldCount &&
+    bodyFields.every((field) => allowedFields.has(field));
+
+  if (
+    Object.keys(params).length !== 0 ||
+    Object.keys(query).length !== 0 ||
+    !hasOnlyAllowedFields
+  ) {
+    throw invalidClientRequest();
+  }
+
+};
 
 export const publicClientListQuerySchema = Joi.object(
   publicClientListQueryShape,
@@ -92,21 +132,18 @@ export const parseClientPasswordRequest = ({
   params = {},
   query = {},
 } = {}) => {
-  const bodyIsObject =
-    body !== null && typeof body === "object" && !Array.isArray(body);
-  const bodyFields = bodyIsObject ? Object.keys(body) : [];
-  const hasExactBodyFields =
-    bodyFields.length === clientPasswordFields.length &&
-    bodyFields.every((field) => clientPasswordFieldSet.has(field));
+  assertClientMutationRequestStructure({
+    allowedFields: clientPasswordFieldSet,
+    body,
+    maximumFieldCount: clientPasswordFields.length,
+    minimumFieldCount: clientPasswordFields.length,
+    params,
+    query,
+  });
   const allValuesAreStrings =
-    hasExactBodyFields &&
     clientPasswordFields.every((field) => typeof body[field] === "string");
 
-  if (
-    Object.keys(params).length !== 0 ||
-    Object.keys(query).length !== 0 ||
-    !allValuesAreStrings
-  ) {
+  if (!allValuesAreStrings) {
     throw invalidClientRequest();
   }
 
@@ -121,6 +158,61 @@ export const parseClientPasswordRequest = ({
   return Object.fromEntries(
     clientPasswordFields.map((field) => [field, body[field]]),
   );
+};
+
+export const parseClientProfileUpdateRequest = ({
+  body,
+  params = {},
+  query = {},
+} = {}) => {
+  assertClientMutationRequestStructure({
+    allowedFields: clientProfileUpdateFieldSet,
+    body,
+    maximumFieldCount: clientProfileUpdateFields.length,
+    minimumFieldCount: 1,
+    params,
+    query,
+  });
+
+  const errors = {};
+  const normalizedUpdates = {};
+
+  for (const field of clientProfileUpdateFields) {
+    if (!Object.hasOwn(body, field)) continue;
+
+    if (field === "name") {
+      if (typeof body.name !== "string") {
+        errors.name = clientProfileValidationMessages.name;
+        continue;
+      }
+
+      const normalizedName = body.name.trim();
+      const nameLength = Array.from(normalizedName).length;
+
+      if (nameLength < 2 || nameLength > 100) {
+        errors.name = clientProfileValidationMessages.name;
+        continue;
+      }
+
+      normalizedUpdates.name = normalizedName;
+      continue;
+    }
+
+    const emailValidation = clientProfileEmailSchema.validate(body.email);
+
+    if (emailValidation.error) {
+      errors.email = clientProfileValidationMessages.email;
+      continue;
+    }
+
+    normalizedUpdates.email = emailValidation.value;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    throw invalidClientProfileValues(errors);
+  }
+
+  return normalizedUpdates;
 };
 
 export const clientSchema = Joi.object({
@@ -146,12 +238,5 @@ export const updateClientSchema = Joi.object({
     clientDesc: Joi.string().max(100),
     clientCountry: Joi.string(),
     clientLastLogin: Joi.string().isoDate()
-});
-
-export const updateInfoSchema = Joi.object({
-    name: Joi.string(),
-    email: Joi.string()
-        .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net'] } }),
-    image_url: Joi.string(),
 });
 
