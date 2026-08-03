@@ -1,24 +1,22 @@
 
 import express from "express";
-import auth from '../../middleware/auth.middleware.js'
-import valMiddleware from '../../middleware/val.middleware.js'
+import auth from "../../middleware/auth.middleware.js";
 import {
   changeClientPassword,
+  deleteClient,
   getPublicProfileById,
   listPublicProfiles,
   respondToClientError,
-  updateClientInfo,
-} from './clientsController.js'
+  updateClientProfile,
+} from "./clientsController.js";
 import endPoints from "../../middleware/endPoints.js";
 import { validateParams } from "../../middleware/val.middleware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import { deleteClient } from "./clientsController.js";
+import { parsePublicClientLookupRequest } from "./clientsSchema.js";
 import {
-  parsePublicClientLookupRequest,
-  updateInfoSchema,
-} from "./clientsSchema.js";
-import { validateClientPasswordRequest } from "./clientRequest.middleware.js";
-import { upload } from "../../middleware/uploadImages.js";
+  validateClientPasswordRequest,
+  validateClientProfileUpdateRequest,
+} from "./clientRequest.middleware.js";
 
 const validatePublicClientLookupRequest = (req, res, next) => {
   try {
@@ -43,6 +41,8 @@ export const createClientsRouter = ({
   clientPasswordRequestHandler = validateClientPasswordRequest,
   getPublicProfileByIdHandler = getPublicProfileById,
   listPublicProfilesHandler = listPublicProfiles,
+  updateProfileHandler = updateClientProfile,
+  clientProfileRequestHandler = validateClientProfileUpdateRequest,
 } = {}) => {
   const router = express.Router();
 
@@ -53,13 +53,22 @@ export const createClientsRouter = ({
     clientPasswordRequestHandler,
     asyncHandler(changePasswordHandler),
   );
+  router.patch(
+    "/me",
+    clientAuthHandler,
+    clientProfileRequestHandler,
+    asyncHandler(updateProfileHandler),
+  );
   router.get(
     "/:id",
     validatePublicClientLookupRequest,
     asyncHandler(getPublicProfileByIdHandler),
   );
-  router.put('/updateClientInfo/:id', validateParams(), valMiddleware(updateInfoSchema), upload.single('image'), updateClientInfo); // auth(endPoints.client)
-  router.delete("/deleteClient/:id", validateParams(), asyncHandler(deleteClient));
+  router.delete(
+    "/deleteClient/:id",
+    validateParams(),
+    asyncHandler(deleteClient),
+  );
 
   return router;
 };

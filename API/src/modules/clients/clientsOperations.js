@@ -1,15 +1,20 @@
 import bcrypt from "bcryptjs";
+import AdminModel from "../../../DB/models/admin_model.js";
 import ClientModel from "../../../DB/models/client_model.js";
+import FreelancerModel from "../../../DB/models/freelancer_model.js";
 import { getSaltRounds } from "../../config/saltRounds.js";
 import {
   clientAccountNotFound,
+  clientEmailConflict,
   clientPasswordChangeConflict,
   clientProfileNotFound,
   incorrectCurrentClientPassword,
   reusedCurrentClientPassword,
 } from "./clientErrors.js";
 import {
+  clientSelfProjection,
   publicClientProfileProjection,
+  toClientSelf,
   toPublicClientProfile,
 } from "./clientRepresentations.js";
 
@@ -18,12 +23,100 @@ const publicClientProfileSort = Object.freeze({
   _id: -1,
 });
 
+const normalizeStoredProfileValue = (field, value) => {
+  if (typeof value !== "string") return value;
+
+  const normalizedValue = value.trim();
+
+  return field === "email"
+    ? normalizedValue.toLowerCase()
+    : normalizedValue;
+};
+
+const escapeRegularExpression = (value) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const isClientEmailDuplicateKeyError = (error) => {
+  return (
+    error?.code === 11000 &&
+    (Object.hasOwn(error?.keyPattern ?? {}, "email") ||
+      Object.hasOwn(error?.keyValue ?? {}, "email"))
+  );
+};
+
 export const createClientOperations = ({
+  adminModel = AdminModel,
   clientModel = ClientModel,
+  freelancerModel = FreelancerModel,
   getPasswordSaltRounds = getSaltRounds,
   passwordHasher = bcrypt,
 } = {}) => {
   return {
+    updateProfile: async ({ clientId, updates }) => {
+      const storedClient = await clientModel
+        .findById(clientId, clientSelfProjection)
+        .lean();
+
+      if (!storedClient) {
+        throw clientAccountNotFound();
+      }
+
+      if (Object.hasOwn(updates, "email")) {
+        const emailPattern = new RegExp(
+          `^${escapeRegularExpression(updates.email)}$`,
+          "i",
+        );
+        const emailMatches = await Promise.all([
+          adminModel.exists({ email: emailPattern }),
+          clientModel.exists({
+            _id: { $ne: clientId },
+            email: emailPattern,
+          }),
+          freelancerModel.exists({ email: emailPattern }),
+        ]);
+
+        if (emailMatches.some(Boolean)) {
+          throw clientEmailConflict();
+        }
+      }
+
+      const updateIsNoOp = Object.entries(updates).every(
+        ([field, value]) => {
+          return (
+            normalizeStoredProfileValue(field, storedClient[field]) === value
+          );
+        },
+      );
+
+      if (updateIsNoOp) {
+        return toClientSelf(storedClient);
+      }
+
+      let updatedClient;
+
+      try {
+        updatedClient = await clientModel
+          .findByIdAndUpdate(
+            clientId,
+            { $set: updates },
+            { new: true, projection: clientSelfProjection },
+          )
+          .lean();
+      } catch (error) {
+        if (isClientEmailDuplicateKeyError(error)) {
+          throw clientEmailConflict();
+        }
+
+        throw error;
+      }
+
+      if (!updatedClient) {
+        throw clientAccountNotFound();
+      }
+
+      return toClientSelf(updatedClient);
+    },
     changePassword: async ({
       clientId,
       currentPassword,

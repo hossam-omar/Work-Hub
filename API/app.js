@@ -7,6 +7,7 @@ import { errorHandler } from "./src/middleware/error.middleware.js";
 import { notFoundHandler } from "./src/middleware/not-found.middleware.js";
 import {
   handleClientPasswordRequestParseError,
+  handleClientProfileUpdateParseError,
 } from "./src/modules/clients/clientRequest.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +23,7 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(handleClientPasswordRequestParseError);
+app.use(handleClientProfileUpdateParseError);
 
 registerRoutes(app);
 app.use("/uploads", express.static(uploadsDir));

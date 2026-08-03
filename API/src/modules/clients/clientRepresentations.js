@@ -8,6 +8,15 @@ export const publicClientProfileProjection = Object.freeze({
   country: 1,
 });
 
+export const clientSelfProjection = Object.freeze({
+  _id: 1,
+  name: 1,
+  email: 1,
+  image_url: 1,
+  coverImage_url: 1,
+  country: 1,
+});
+
 const getUploadFilename = (reference) => {
   if (typeof reference !== "string") return null;
 
@@ -58,6 +67,19 @@ export const toPublicClientProfile = (client) => {
   return {
     id: String(source._id ?? source.id),
     name: source.name,
+    imageUrl: normalizePublicClientImage(source.image_url),
+    coverImageUrl: normalizePublicClientImage(source.coverImage_url),
+    country: source.country,
+  };
+};
+
+export const toClientSelf = (client) => {
+  const source = client?.toObject ? client.toObject() : client;
+
+  return {
+    id: String(source._id ?? source.id),
+    name: source.name,
+    email: source.email,
     imageUrl: normalizePublicClientImage(source.image_url),
     coverImageUrl: normalizePublicClientImage(source.coverImage_url),
     country: source.country,

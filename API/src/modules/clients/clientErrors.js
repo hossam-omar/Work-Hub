@@ -7,8 +7,20 @@ export class ClientError extends Error {
   }
 }
 
+export class ClientValidationError extends ClientError {
+  constructor(errors) {
+    super("CLIENT_VALIDATION_FAILED", 400, "Validation failed.");
+    this.name = "ClientValidationError";
+    this.errors = errors;
+  }
+}
+
 export const invalidClientRequest = () => {
   return new ClientError("INVALID_REQUEST", 400, "Invalid request.");
+};
+
+export const invalidClientProfileValues = (errors) => {
+  return new ClientValidationError(errors);
 };
 
 export const invalidClientPagination = () => {
@@ -88,5 +100,13 @@ export const clientPasswordChangeConflict = () => {
     "PASSWORD_CHANGE_CONFLICT",
     409,
     "Password was changed by another request. Please sign in again.",
+  );
+};
+
+export const clientEmailConflict = () => {
+  return new ClientError(
+    "CLIENT_EMAIL_CONFLICT",
+    409,
+    "Email is already in use.",
   );
 };
