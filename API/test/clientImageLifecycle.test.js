@@ -676,7 +676,7 @@ test("returns a safe failure and logs exact safe cleanup fields without retrying
           operation: "replace-client-image",
           reference,
           code: "EPERM",
-          message: "Filesystem EPERM.",
+          message: "EPERM: access denied, unlink '[path]'.",
           correlationId: "request-42",
         },
       ]);
@@ -688,8 +688,50 @@ test("returns a safe failure and logs exact safe cleanup fields without retrying
       unlinkFn: async (target) => {
         unlinkCalls += 1;
         throw Object.assign(
-          new Error(`${target} private-token request-body`),
+          new Error(`EPERM: access denied, unlink '${target}'.`),
           { code: "EPERM" },
+        );
+      },
+      logger: { error: (event) => events.push(event) },
+    },
+  );
+});
+
+test("sanitizes untrusted cleanup context and sensitive error details", async () => {
+  const events = [];
+  await withLifecycle(
+    async ({ lifecycle, uploadsRoot }) => {
+      const reference = `/uploads/client-${"1".repeat(48)}.jpg`;
+      await writeFile(path.join(uploadsRoot, path.basename(reference)), "image");
+
+      await lifecycle.cleanupManagedReference({
+        reference,
+        operation: "replace token=private-token",
+        correlationId: "request-body={private-data}",
+      });
+
+      assert.deepEqual(events, [
+        {
+          phase: "cleanup",
+          operation: "cleanup-client-image",
+          reference,
+          code: "EACCES",
+          message: "EACCES: [redacted] [redacted] at '[path]' [redacted].",
+        },
+      ]);
+      const serialized = JSON.stringify(events);
+      assert.equal(serialized.includes(uploadsRoot), false);
+      assert.equal(serialized.includes("private-token"), false);
+      assert.equal(serialized.includes("private-data"), false);
+      assert.equal(serialized.includes("request-body"), false);
+    },
+    {
+      unlinkFn: async (target) => {
+        throw Object.assign(
+          new Error(
+            `EACCES: authorization=private-token password=private-data at '${target}' request-body.`,
+          ),
+          { code: "EACCES" },
         );
       },
       logger: { error: (event) => events.push(event) },
@@ -744,4 +786,28 @@ test("removes partial staging when the upload stream fails", async () => {
     );
     assert.deepEqual(await readdir(stagingRoot), []);
   });
+});
+
+test("does not remove a pre-existing staging directory on a random-name collision", async () => {
+  await withLifecycle(
+    async ({ lifecycle, stagingRoot }) => {
+      const collidingDirectory = path.join(stagingRoot, "0".repeat(48));
+      const sentinel = path.join(collidingDirectory, "belongs-to-another-upload");
+      await mkdir(collidingDirectory);
+      await writeFile(sentinel, "keep");
+
+      await assertLifecycleError(
+        () =>
+          lifecycle.stageUpload({
+            stream: Readable.from(Buffer.from("unused")),
+            originalName: "avatar.png",
+            mimeType: "image/png",
+          }),
+        CLIENT_IMAGE_ERROR_CATEGORIES.STORAGE_FAILURE,
+      );
+
+      assert.equal(await readFile(sentinel, "utf8"), "keep");
+    },
+    { randomBytesFn: () => Buffer.alloc(24) },
+  );
 });

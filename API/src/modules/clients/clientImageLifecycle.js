@@ -160,12 +160,59 @@ const outputExtensionFor = (format) => {
 };
 
 const normalizeErrorCode = (error) =>
-  typeof error?.code === "string" ? error.code : "UNKNOWN";
+  typeof error?.code === "string" && /^[A-Z][A-Z0-9_]{0,31}$/.test(error.code)
+    ? error.code
+    : "UNKNOWN";
 
-const safeErrorMessage = (error) => {
+const escapeRegularExpression = (value) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const sanitizeFilesystemMessage = (error, sensitivePaths) => {
   const code = normalizeErrorCode(error);
-  return code === "UNKNOWN" ? "Filesystem operation failed." : `Filesystem ${code}.`;
+  if (typeof error?.message !== "string" || error.message.length === 0) {
+    return code === "UNKNOWN"
+      ? "Filesystem operation failed."
+      : `Filesystem ${code}.`;
+  }
+
+  let message = error.message.replace(/[\r\n\t]+/g, " ");
+  const pathsToRemove = [error.path, ...sensitivePaths]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .sort((left, right) => right.length - left.length);
+  for (const sensitivePath of pathsToRemove) {
+    message = message.replace(
+      new RegExp(escapeRegularExpression(sensitivePath), "gi"),
+      "[path]",
+    );
+  }
+
+  message = message
+    .replace(/https?:\/\/[^\s'\"]+/gi, "[url]")
+    .replace(/\[path\](?:[\\/][^'\"\r\n]*)?/g, "[path]")
+    .replace(/[A-Za-z]:[\\/][^'\"\r\n]*/g, "[path]")
+    .replace(/\\\\[^'\"\r\n]*/g, "[path]")
+    .replace(/\/[^'\"\r\n]*/g, "[path]")
+    .replace(
+      /\b(?:authorization|credentials?|password|request[-_ ]?body|secret|token)\b(?:\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+))?/gi,
+      "[redacted]",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (message.length === 0) return `Filesystem ${code}.`;
+  return message.length <= 256 ? message : `${message.slice(0, 253)}...`;
 };
+
+const safeOperation = (operation) =>
+  typeof operation === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(operation)
+    ? operation
+    : "cleanup-client-image";
+
+const safeCorrelationId = (correlationId) =>
+  typeof correlationId === "string" &&
+  /^[A-Za-z0-9][A-Za-z0-9:_-]{0,63}$/.test(correlationId)
+    ? correlationId
+    : undefined;
 
 const isFilesystemError = (error) =>
   typeof error?.code === "string" &&
@@ -227,14 +274,17 @@ export const createClientImageLifecycle = ({
   let rootsPromise;
 
   const logCleanupFailure = ({ operation, reference, correlationId, error }) => {
+    const sanitizedCorrelationId = safeCorrelationId(correlationId);
     const event = {
       phase: "cleanup",
-      operation,
+      operation: safeOperation(operation),
       reference,
       code: normalizeErrorCode(error),
-      message: safeErrorMessage(error),
+      message: sanitizeFilesystemMessage(error, [stagingRoot, uploadsRoot]),
     };
-    if (correlationId !== undefined) event.correlationId = correlationId;
+    if (sanitizedCorrelationId !== undefined) {
+      event.correlationId = sanitizedCorrelationId;
+    }
     try {
       logger.error(event);
     } catch {
@@ -302,12 +352,16 @@ export const createClientImageLifecycle = ({
       rawPath,
       state: "staging",
     };
+    let ownsStagingDirectory = false;
 
     try {
       await mkdirFn(directory, { recursive: false });
+      ownsStagingDirectory = true;
       await pipeline(stream, createByteLimit(), createWriteStreamFn(rawPath));
     } catch (error) {
-      await removeStagingDirectory(record, "discard-partial-upload");
+      if (ownsStagingDirectory) {
+        await removeStagingDirectory(record, "discard-partial-upload");
+      }
       if (error instanceof ClientImageLifecycleError) throw error;
       throw lifecycleError(CLIENT_IMAGE_ERROR_CATEGORIES.STORAGE_FAILURE, error);
     }
