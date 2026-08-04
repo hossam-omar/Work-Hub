@@ -162,14 +162,25 @@ export const parseClientPasswordRequest = ({
 
 export const parseClientProfileUpdateRequest = ({
   body,
+  hasImage = false,
+  isMultipart = false,
   params = {},
   query = {},
 } = {}) => {
+  if (
+    isMultipart &&
+    body !== null &&
+    typeof body === "object" &&
+    Object.values(body).some(Array.isArray)
+  ) {
+    throw invalidClientRequest();
+  }
+
   assertClientMutationRequestStructure({
     allowedFields: clientProfileUpdateFieldSet,
     body,
     maximumFieldCount: clientProfileUpdateFields.length,
-    minimumFieldCount: 1,
+    minimumFieldCount: hasImage ? 0 : 1,
     params,
     query,
   });

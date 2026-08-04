@@ -110,3 +110,27 @@ export const clientEmailConflict = () => {
     "Email is already in use.",
   );
 };
+
+export const invalidClientImage = () => {
+  return new ClientError(
+    "INVALID_CLIENT_IMAGE",
+    400,
+    "Invalid image file.",
+  );
+};
+
+export const clientImagePayloadTooLarge = () => {
+  return new ClientError(
+    "CLIENT_IMAGE_PAYLOAD_TOO_LARGE",
+    413,
+    "Payload too large.",
+  );
+};
+
+export const clientProfileChangeConflict = () => {
+  return new ClientError(
+    "CLIENT_PROFILE_CHANGE_CONFLICT",
+    409,
+    "Client profile changed; please retry.",
+  );
+};

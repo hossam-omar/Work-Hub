@@ -1,8 +1,16 @@
 
 import client from "../../../DB/models/client_model.js";
-import { ClientError } from "./clientErrors.js";
+import {
+  ClientError,
+  clientImagePayloadTooLarge,
+  invalidClientImage,
+} from "./clientErrors.js";
 import { clientOperations } from "./clientsOperations.js";
 import { parsePublicClientListQuery } from "./clientsSchema.js";
+import {
+  CLIENT_IMAGE_ERROR_CATEGORIES,
+  ClientImageLifecycleError,
+} from "./clientImageLifecycle.js";
 
 export const respondToClientError = ({
   error,
@@ -11,6 +19,31 @@ export const respondToClientError = ({
   operation,
   redactErrorDetails = false,
 }) => {
+  if (error instanceof ClientImageLifecycleError) {
+    if (
+      error.category ===
+      CLIENT_IMAGE_ERROR_CATEGORIES.TRANSPORT_SIZE_EXCEEDED
+    ) {
+      const mappedError = clientImagePayloadTooLarge();
+      return res.status(mappedError.statusCode).json({
+        message: mappedError.message,
+      });
+    }
+
+    if (error.category !== CLIENT_IMAGE_ERROR_CATEGORIES.STORAGE_FAILURE) {
+      const mappedError = invalidClientImage();
+      return res.status(mappedError.statusCode).json({
+        message: mappedError.message,
+      });
+    }
+
+    logger.error(operation, {
+      name: error.name,
+      category: error.category,
+    });
+    return res.status(500).json({ message: "Internal server error." });
+  }
+
   if (error instanceof ClientError) {
     return res.status(error.statusCode).json({ message: error.message });
   }
@@ -111,6 +144,13 @@ export const createUpdateClientProfileController = ({
       const client = await operations.updateProfile({
         clientId: req.user._id,
         updates: res.locals.clientProfileUpdate,
+        ...(req.id === undefined ? {} : { correlationId: req.id }),
+        ...(res.locals.clientProfileImageUploadHandle === undefined
+          ? {}
+          : {
+              imageUploadHandle:
+                res.locals.clientProfileImageUploadHandle,
+            }),
       });
 
       return res.status(200).json({
@@ -123,6 +163,8 @@ export const createUpdateClientProfileController = ({
         res,
         logger,
         operation: "Failed to update Client profile.",
+        redactErrorDetails:
+          res.locals.clientProfileImageUploadHandle !== undefined,
       });
     }
   };
@@ -130,6 +172,24 @@ export const createUpdateClientProfileController = ({
 
 export const updateClientProfile =
   createUpdateClientProfileController();
+
+export const createClientProfileUpdateErrorHandler = ({
+  logger = console,
+} = {}) => {
+  return (error, _req, res, next) => {
+    if (res.headersSent) return next(error);
+
+    return respondToClientError({
+      error,
+      res,
+      logger,
+      operation: "Failed to update Client profile.",
+    });
+  };
+};
+
+export const handleClientProfileUpdateError =
+  createClientProfileUpdateErrorHandler();
   
 // Delete Client
 export const deleteClient = async (req, res) => {
