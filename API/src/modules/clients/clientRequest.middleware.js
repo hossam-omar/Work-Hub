@@ -40,6 +40,21 @@ export const handleClientPasswordRequestParseError =
 export const handleClientProfileUpdateParseError =
   createClientParseErrorHandler(clientProfileUpdatePathPattern);
 
+const respondToClientRequestValidationError = (error, res, next) => {
+  if (error instanceof ClientValidationError) {
+    return res.status(error.statusCode).json({
+      message: error.message,
+      errors: error.errors,
+    });
+  }
+
+  if (error instanceof ClientError) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+
+  return next(error);
+};
+
 const createClientJsonRequestValidator = ({ localKey, parseRequest }) => {
   return (req, res, next) => {
     try {
@@ -55,18 +70,7 @@ const createClientJsonRequestValidator = ({ localKey, parseRequest }) => {
 
       return next();
     } catch (error) {
-      if (error instanceof ClientValidationError) {
-        return res.status(error.statusCode).json({
-          message: error.message,
-          errors: error.errors,
-        });
-      }
-
-      if (error instanceof ClientError) {
-        return res.status(error.statusCode).json({ message: error.message });
-      }
-
-      return next(error);
+      return respondToClientRequestValidationError(error, res, next);
     }
   };
 };
@@ -76,21 +80,6 @@ export const validateClientPasswordRequest =
     localKey: "clientPasswordChange",
     parseRequest: parseClientPasswordRequest,
   });
-
-const respondToClientRequestValidationError = (error, res, next) => {
-  if (error instanceof ClientValidationError) {
-    return res.status(error.statusCode).json({
-      message: error.message,
-      errors: error.errors,
-    });
-  }
-
-  if (error instanceof ClientError) {
-    return res.status(error.statusCode).json({ message: error.message });
-  }
-
-  return next(error);
-};
 
 const createClientImageStagingStorage = (imageLifecycle) => ({
   _handleFile(req, file, callback) {
