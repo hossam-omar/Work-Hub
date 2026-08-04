@@ -319,6 +319,7 @@ export const createClientImageLifecycle = ({
   const removeStagingDirectory = async (record, operation) => {
     try {
       await rmFn(record.directory, { recursive: true, force: true });
+      return CLIENT_IMAGE_CLEANUP_OUTCOMES.CLEANED;
     } catch (error) {
       logCleanupFailure({
         operation,
@@ -326,6 +327,7 @@ export const createClientImageLifecycle = ({
         correlationId: record.correlationId,
         error,
       });
+      return CLIENT_IMAGE_CLEANUP_OUTCOMES.FAILED;
     }
   };
 
@@ -469,6 +471,22 @@ export const createClientImageLifecycle = ({
     }
   };
 
+  const discardStagedUpload = async (
+    handle,
+    { operation = "discard-staged-client-image", correlationId } = {},
+  ) => {
+    const record =
+      handle !== null && typeof handle === "object" ? handles.get(handle) : null;
+    if (!record || record.state !== "staged") {
+      return { category: CLIENT_IMAGE_CLEANUP_OUTCOMES.NOT_CLEANABLE };
+    }
+
+    record.state = "discarded";
+    if (correlationId !== undefined) record.correlationId = correlationId;
+    const category = await removeStagingDirectory(record, operation);
+    return { category };
+  };
+
   const classifyManagedReference = (reference, { retainedReference } = {}) => {
     if (
       typeof reference !== "string" ||
@@ -548,6 +566,7 @@ export const createClientImageLifecycle = ({
 
   return Object.freeze({
     stageUpload,
+    discardStagedUpload,
     processAndPromote,
     classifyManagedReference,
     cleanupManagedReference,

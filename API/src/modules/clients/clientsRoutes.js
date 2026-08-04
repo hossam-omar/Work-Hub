@@ -5,6 +5,7 @@ import {
   changeClientPassword,
   deleteClient,
   getPublicProfileById,
+  handleClientProfileUpdateError,
   listPublicProfiles,
   respondToClientError,
   updateClientProfile,
@@ -43,6 +44,7 @@ export const createClientsRouter = ({
   listPublicProfilesHandler = listPublicProfiles,
   updateProfileHandler = updateClientProfile,
   clientProfileRequestHandler = validateClientProfileUpdateRequest,
+  clientProfileErrorHandler = handleClientProfileUpdateError,
 } = {}) => {
   const router = express.Router();
 
@@ -58,6 +60,7 @@ export const createClientsRouter = ({
     clientAuthHandler,
     clientProfileRequestHandler,
     asyncHandler(updateProfileHandler),
+    clientProfileErrorHandler,
   );
   router.get(
     "/:id",

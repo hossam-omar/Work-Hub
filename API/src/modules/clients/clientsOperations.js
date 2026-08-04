@@ -7,6 +7,7 @@ import {
   clientAccountNotFound,
   clientEmailConflict,
   clientPasswordChangeConflict,
+  clientProfileChangeConflict,
   clientProfileNotFound,
   incorrectCurrentClientPassword,
   reusedCurrentClientPassword,
@@ -17,6 +18,7 @@ import {
   toClientSelf,
   toPublicClientProfile,
 } from "./clientRepresentations.js";
+import { clientImageLifecycle } from "./clientImageLifecycle.js";
 
 const publicClientProfileSort = Object.freeze({
   createdAt: -1,
@@ -50,72 +52,150 @@ export const createClientOperations = ({
   clientModel = ClientModel,
   freelancerModel = FreelancerModel,
   getPasswordSaltRounds = getSaltRounds,
+  imageLifecycle = clientImageLifecycle,
   passwordHasher = bcrypt,
 } = {}) => {
+  const preservePrimaryOutcome = async (cleanup) => {
+    try {
+      await cleanup();
+    } catch {
+      // Lifecycle cleanup is best-effort and cannot replace business outcomes.
+    }
+  };
+
   return {
-    updateProfile: async ({ clientId, updates }) => {
-      const storedClient = await clientModel
-        .findById(clientId, clientSelfProjection)
-        .lean();
-
-      if (!storedClient) {
-        throw clientAccountNotFound();
-      }
-
-      if (Object.hasOwn(updates, "email")) {
-        const emailPattern = new RegExp(
-          `^${escapeRegularExpression(updates.email)}$`,
-          "i",
-        );
-        const emailMatches = await Promise.all([
-          adminModel.exists({ email: emailPattern }),
-          clientModel.exists({
-            _id: { $ne: clientId },
-            email: emailPattern,
-          }),
-          freelancerModel.exists({ email: emailPattern }),
-        ]);
-
-        if (emailMatches.some(Boolean)) {
-          throw clientEmailConflict();
-        }
-      }
-
-      const updateIsNoOp = Object.entries(updates).every(
-        ([field, value]) => {
-          return (
-            normalizeStoredProfileValue(field, storedClient[field]) === value
-          );
-        },
-      );
-
-      if (updateIsNoOp) {
-        return toClientSelf(storedClient);
-      }
-
-      let updatedClient;
+    updateProfile: async ({
+      clientId,
+      updates,
+      imageUploadHandle,
+      correlationId,
+    }) => {
+      let ownedStagedHandle = imageUploadHandle;
+      let ownedPromotedReference;
 
       try {
-        updatedClient = await clientModel
+        const storedClient = await clientModel
+          .findById(clientId, clientSelfProjection)
+          .lean();
+
+        if (!storedClient) {
+          throw clientAccountNotFound();
+        }
+
+        if (Object.hasOwn(updates, "email")) {
+          const emailPattern = new RegExp(
+            `^${escapeRegularExpression(updates.email)}$`,
+            "i",
+          );
+          const emailMatches = await Promise.all([
+            adminModel.exists({ email: emailPattern }),
+            clientModel.exists({
+              _id: { $ne: clientId },
+              email: emailPattern,
+            }),
+            freelancerModel.exists({ email: emailPattern }),
+          ]);
+
+          if (emailMatches.some(Boolean)) {
+            throw clientEmailConflict();
+          }
+        }
+
+        if (imageUploadHandle !== undefined) {
+          ownedStagedHandle = undefined;
+          const promotedImage = await imageLifecycle.processAndPromote(
+            imageUploadHandle,
+          );
+          ownedPromotedReference = promotedImage.reference;
+          const conditionalFilter = {
+            _id: clientId,
+            image_url: storedClient.image_url ?? null,
+          };
+          const imageUpdates = {
+            ...updates,
+            image_url: promotedImage.reference,
+          };
+          const updatedClient = await clientModel
+            .findOneAndUpdate(
+              conditionalFilter,
+              { $set: imageUpdates },
+              { new: true, projection: clientSelfProjection },
+            )
+            .lean();
+
+          if (!updatedClient) {
+            const clientStillExists = await clientModel.exists({
+              _id: clientId,
+            });
+            if (!clientStillExists) {
+              throw clientAccountNotFound();
+            }
+            throw clientProfileChangeConflict();
+          }
+
+          ownedPromotedReference = undefined;
+          await preservePrimaryOutcome(() =>
+            imageLifecycle.cleanupManagedReference({
+              reference: storedClient.image_url,
+              retainedReference: promotedImage.reference,
+              operation: "replace-client-image",
+              correlationId,
+            }),
+          );
+
+          return toClientSelf(updatedClient);
+        }
+
+        const updateIsNoOp = Object.entries(updates).every(
+          ([field, value]) => {
+            return (
+              normalizeStoredProfileValue(field, storedClient[field]) === value
+            );
+          },
+        );
+
+        if (updateIsNoOp) {
+          return toClientSelf(storedClient);
+        }
+
+        const updatedClient = await clientModel
           .findByIdAndUpdate(
             clientId,
             { $set: updates },
             { new: true, projection: clientSelfProjection },
           )
           .lean();
+
+        if (!updatedClient) {
+          throw clientAccountNotFound();
+        }
+
+        return toClientSelf(updatedClient);
       } catch (error) {
+        if (ownedStagedHandle !== undefined) {
+          await preservePrimaryOutcome(() =>
+            imageLifecycle.discardStagedUpload(ownedStagedHandle, {
+              operation: "discard-unretained-client-image",
+              correlationId,
+            }),
+          );
+        }
+        if (ownedPromotedReference !== undefined) {
+          await preservePrimaryOutcome(() =>
+            imageLifecycle.cleanupManagedReference({
+              reference: ownedPromotedReference,
+              operation: "discard-unretained-client-image",
+              correlationId,
+            }),
+          );
+        }
+
         if (isClientEmailDuplicateKeyError(error)) {
           throw clientEmailConflict();
         }
 
         throw error;
       }
-
-      if (!updatedClient) {
-        throw clientAccountNotFound();
-      }
-
-      return toClientSelf(updatedClient);
     },
     changePassword: async ({
       clientId,
