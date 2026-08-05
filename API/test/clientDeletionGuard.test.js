@@ -21,148 +21,38 @@ const createDependencyModels = (overrides = {}) => {
   };
 };
 
-test("Community membership blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      communityModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-community-id" };
-        },
-      },
-    }),
-  );
+const typedReferenceCases = [
+  { name: "Client", discriminator: "client", blocked: true },
+  { name: "Freelancer", discriminator: "freelancer", blocked: false },
+  { name: "missing", discriminator: undefined, blocked: true },
+  { name: "null", discriminator: null, blocked: true },
+  { name: "empty", discriminator: "", blocked: true },
+  { name: "wrong case", discriminator: "Client", blocked: true },
+  { name: "unknown", discriminator: "administrator", blocked: true },
+];
 
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ clientMembers: clientId }]);
-});
-
-test("Course enrollment blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      courseModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-course-id" };
-        },
-      },
-    }),
-  );
-
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ enrolledClientsIds: clientId }]);
-});
-
-test("Conversation participation blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      conversationModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-conversation-id" };
-        },
-      },
-    }),
-  );
-
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ client: clientId }]);
-});
-
-test("Order ownership blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      orderModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-order-id" };
-        },
-      },
-    }),
-  );
-
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ clientId }]);
-});
-
-test("Request ownership blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      requestModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-request-id" };
-        },
-      },
-    }),
-  );
-
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ clientId }]);
-});
-
-test("Review ownership blocks Client Account deletion through an existence query", async () => {
-  const queries = [];
-  const guard = createClientDeletionGuard(
-    createDependencyModels({
-      reviewModel: {
-        exists: async (query) => {
-          queries.push(query);
-          return { _id: "private-review-id" };
-        },
-      },
-    }),
-  );
-
-  const result = await guard.isBlocked(clientId);
-
-  assert.equal(result, true);
-  assert.deepEqual(queries, [{ clientId }]);
-});
-
-test("Post poster references block unless the discriminator is explicitly Freelancer", async (t) => {
-  const cases = [
-    { name: "Client", discriminator: "client", blocked: true },
-    { name: "Freelancer", discriminator: "freelancer", blocked: false },
-    { name: "missing", discriminator: undefined, blocked: true },
-    { name: "null", discriminator: null, blocked: true },
-    { name: "empty", discriminator: "", blocked: true },
-    { name: "wrong case", discriminator: "Client", blocked: true },
-    { name: "unknown", discriminator: "administrator", blocked: true },
-  ];
-
-  for (const testCase of cases) {
+const assertTypedReferenceCases = async (
+  t,
+  { model, idField, roleField, expectedQuery, privateIdentifier },
+) => {
+  for (const testCase of typedReferenceCases) {
     await t.test(testCase.name, async () => {
       const queries = [];
-      const post = { posterId: clientId };
+      const record = { [idField]: clientId };
       if (testCase.discriminator !== undefined) {
-        post.posterType = testCase.discriminator;
+        record[roleField] = testCase.discriminator;
       }
       const guard = createClientDeletionGuard(
         createDependencyModels({
-          postModel: {
+          [model]: {
             exists: async (query) => {
               queries.push(query);
-              return Object.hasOwn(query, "posterId") &&
-                post.posterId === query.posterId &&
-                post.posterType !== query.posterType?.$ne
-                ? { _id: "private-post-id" }
-                : null;
+              const targetsReference = Object.hasOwn(query, idField);
+              const match =
+                targetsReference &&
+                record[idField] === query[idField] &&
+                record[roleField] !== query[roleField]?.$ne;
+              return match ? { _id: privateIdentifier } : null;
             },
           },
         }),
@@ -172,51 +62,84 @@ test("Post poster references block unless the discriminator is explicitly Freela
 
       assert.equal(result, testCase.blocked);
       assert.deepEqual(
-        queries.filter((query) => Object.hasOwn(query, "posterId")),
-        [{ posterId: clientId, posterType: { $ne: "freelancer" } }],
+        queries.filter((query) => Object.hasOwn(query, idField)),
+        [expectedQuery],
       );
     });
   }
+};
+
+test("every direct reference blocks Client Account deletion through its existence query", async (t) => {
+  const cases = [
+    {
+      name: "Community membership",
+      model: "communityModel",
+      query: { clientMembers: clientId },
+    },
+    {
+      name: "Course enrollment",
+      model: "courseModel",
+      query: { enrolledClientsIds: clientId },
+    },
+    {
+      name: "Conversation participation",
+      model: "conversationModel",
+      query: { client: clientId },
+    },
+    { name: "Order ownership", model: "orderModel", query: { clientId } },
+    { name: "Request ownership", model: "requestModel", query: { clientId } },
+    { name: "Review ownership", model: "reviewModel", query: { clientId } },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const queries = [];
+      const guard = createClientDeletionGuard(
+        createDependencyModels({
+          [testCase.model]: {
+            exists: async (query) => {
+              queries.push(query);
+              return { _id: "private-dependency-id" };
+            },
+          },
+        }),
+      );
+
+      const result = await guard.isBlocked(clientId);
+
+      assert.equal(result, true);
+      assert.deepEqual(queries, [testCase.query]);
+    });
+  }
+});
+
+test("Post poster references block unless the discriminator is explicitly Freelancer", async (t) => {
+  await assertTypedReferenceCases(t, {
+    model: "postModel",
+    idField: "posterId",
+    roleField: "posterType",
+    expectedQuery: {
+      posterId: clientId,
+      posterType: { $ne: "freelancer" },
+    },
+    privateIdentifier: "private-post-id",
+  });
 });
 
 test("Post comments block only when one matching comment is not explicitly Freelancer", async (t) => {
   const otherClientId = "507f1f77bcf86cd799439012";
   const cases = [
-    {
-      name: "Client comment",
-      comments: [{ userId: clientId, userRole: "client" }],
-      blocked: true,
-    },
-    {
-      name: "Freelancer comment",
-      comments: [{ userId: clientId, userRole: "freelancer" }],
-      blocked: false,
-    },
-    {
-      name: "missing role",
-      comments: [{ userId: clientId }],
-      blocked: true,
-    },
-    {
-      name: "null role",
-      comments: [{ userId: clientId, userRole: null }],
-      blocked: true,
-    },
-    {
-      name: "empty role",
-      comments: [{ userId: clientId, userRole: "" }],
-      blocked: true,
-    },
-    {
-      name: "wrong-case role",
-      comments: [{ userId: clientId, userRole: "Client" }],
-      blocked: true,
-    },
-    {
-      name: "unknown role",
-      comments: [{ userId: clientId, userRole: "administrator" }],
-      blocked: true,
-    },
+    ...typedReferenceCases.map((testCase) => {
+      const comment = { userId: clientId };
+      if (testCase.discriminator !== undefined) {
+        comment.userRole = testCase.discriminator;
+      }
+      return {
+        name: testCase.name,
+        comments: [comment],
+        blocked: testCase.blocked,
+      };
+    }),
     {
       name: "different comments cannot combine their fields",
       comments: [
@@ -295,87 +218,29 @@ test("an untyped Post like blocks Client Account deletion", async () => {
 });
 
 test("Message sender references block unless the discriminator is explicitly Freelancer", async (t) => {
-  const cases = [
-    { name: "Client", discriminator: "client", blocked: true },
-    { name: "Freelancer", discriminator: "freelancer", blocked: false },
-    { name: "missing", discriminator: undefined, blocked: true },
-    { name: "null", discriminator: null, blocked: true },
-    { name: "empty", discriminator: "", blocked: true },
-    { name: "wrong case", discriminator: "Client", blocked: true },
-    { name: "unknown", discriminator: "administrator", blocked: true },
-  ];
-
-  for (const testCase of cases) {
-    await t.test(testCase.name, async () => {
-      const queries = [];
-      const message = { senderId: clientId };
-      if (testCase.discriminator !== undefined) {
-        message.senderType = testCase.discriminator;
-      }
-      const guard = createClientDeletionGuard(
-        createDependencyModels({
-          messageModel: {
-            exists: async (query) => {
-              queries.push(query);
-              const match =
-                message.senderId === query.senderId &&
-                message.senderType !== query.senderType?.$ne;
-              return match ? { _id: "private-message-id" } : null;
-            },
-          },
-        }),
-      );
-
-      const result = await guard.isBlocked(clientId);
-
-      assert.equal(result, testCase.blocked);
-      assert.deepEqual(queries, [
-        { senderId: clientId, senderType: { $ne: "freelancer" } },
-      ]);
-    });
-  }
+  await assertTypedReferenceCases(t, {
+    model: "messageModel",
+    idField: "senderId",
+    roleField: "senderType",
+    expectedQuery: {
+      senderId: clientId,
+      senderType: { $ne: "freelancer" },
+    },
+    privateIdentifier: "private-message-id",
+  });
 });
 
 test("Chatbot Conversation sender references block unless the role is explicitly Freelancer", async (t) => {
-  const cases = [
-    { name: "Client", discriminator: "client", blocked: true },
-    { name: "Freelancer", discriminator: "freelancer", blocked: false },
-    { name: "missing", discriminator: undefined, blocked: true },
-    { name: "null", discriminator: null, blocked: true },
-    { name: "empty", discriminator: "", blocked: true },
-    { name: "wrong case", discriminator: "Client", blocked: true },
-    { name: "unknown", discriminator: "administrator", blocked: true },
-  ];
-
-  for (const testCase of cases) {
-    await t.test(testCase.name, async () => {
-      const queries = [];
-      const conversation = { senderId: clientId };
-      if (testCase.discriminator !== undefined) {
-        conversation.senderRole = testCase.discriminator;
-      }
-      const guard = createClientDeletionGuard(
-        createDependencyModels({
-          chatbotConversationModel: {
-            exists: async (query) => {
-              queries.push(query);
-              const match =
-                conversation.senderId === query.senderId &&
-                conversation.senderRole !== query.senderRole?.$ne;
-              return match ? { _id: "private-chatbot-conversation-id" } : null;
-            },
-          },
-        }),
-      );
-
-      const result = await guard.isBlocked(clientId);
-
-      assert.equal(result, testCase.blocked);
-      assert.deepEqual(queries, [
-        { senderId: clientId, senderRole: { $ne: "freelancer" } },
-      ]);
-    });
-  }
+  await assertTypedReferenceCases(t, {
+    model: "chatbotConversationModel",
+    idField: "senderId",
+    roleField: "senderRole",
+    expectedQuery: {
+      senderId: clientId,
+      senderRole: { $ne: "freelancer" },
+    },
+    privateIdentifier: "private-chatbot-conversation-id",
+  });
 });
 
 test("an unreferenced Client is unblocked after every final existence predicate is checked", async () => {
