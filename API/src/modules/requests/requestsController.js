@@ -4,19 +4,51 @@ import order_model from "../../../DB/models/order_model.js";
 import request_model from "../../../DB/models/request_model.js";
 import service_model from "../../../DB/models/service_model.js";
 
+const requestClientProjection = Object.freeze({
+    _id: 1,
+    name: 1,
+    image_url: 1,
+    coverImage_url: 1,
+    country: 1,
+});
+
+const toPlainRecord = (record) => record?._doc ?? record;
+
+const toRequestClient = (clientRecord) => {
+    const client = toPlainRecord(clientRecord);
+    if (!client) return client;
+
+    return {
+        _id: client._id,
+        name: client.name,
+        image_url: client.image_url,
+        coverImage_url: client.coverImage_url,
+        country: client.country,
+    };
+};
+
+const toRequestResponse = (requestRecord) => {
+    const request = toPlainRecord(requestRecord);
+
+    return {
+        ...request,
+        clientId: toRequestClient(request.clientId),
+    };
+};
+
 
 // Get All Requests
 export const getAllRequests = async (req, res) => {
     try {
-        var allRequests = await request_model.find().populate("clientId").populate("serviceId");
+        var allRequests = await request_model.find().populate("clientId", requestClientProjection).populate("serviceId");
 
         if(allRequests.length == 0) {
             return res.status(404).json({ msg:"No requests found!" });
         }
 
         const requests = allRequests.map((request) => {
-            const modifiedRequest = { ...request._doc }; // Create a copy of the service object
-            modifiedRequest.serviceId = { ...modifiedRequest.serviceId._doc }; // Create a copy of the freelancerId object
+            const modifiedRequest = toRequestResponse(request);
+            modifiedRequest.serviceId = { ...toPlainRecord(modifiedRequest.serviceId) }; // Create a copy of the freelancerId object
             modifiedRequest.serviceId.serviceCover_url = "http://" + req.hostname + ":3000/uploads/" + modifiedRequest.serviceId.serviceCover_url;
             return modifiedRequest;
         });
@@ -32,15 +64,15 @@ export const getAllRequests = async (req, res) => {
 export const getClientRequests = async (req, res) => {
     try {
         const clientId = req.params.id
-        var allRequests = await request_model.find({clientId: clientId}).populate("clientId").populate("serviceId");
+        var allRequests = await request_model.find({clientId: clientId}).populate("clientId", requestClientProjection).populate("serviceId");
 
         if(allRequests.length == 0) {
             return res.status(404).json({ msg:"No requests found!" });
         }
 
         const requests = allRequests.map((request) => {
-            const modifiedRequest = { ...request._doc }; // Create a copy of the service object
-            modifiedRequest.serviceId = { ...modifiedRequest.serviceId._doc }; // Create a copy of the freelancerId object
+            const modifiedRequest = toRequestResponse(request);
+            modifiedRequest.serviceId = { ...toPlainRecord(modifiedRequest.serviceId) }; // Create a copy of the freelancerId object
             modifiedRequest.serviceId.serviceCover_url = "http://" + req.hostname + ":3000/uploads/" + modifiedRequest.serviceId.serviceCover_url;
             return modifiedRequest;
         });
@@ -56,15 +88,15 @@ export const getClientRequests = async (req, res) => {
 export const getFreelancerRequests = async (req, res) => {
     try {
         const freelancerId = req.params.id;
-        var allRequests = await request_model.find({freelancerId: freelancerId}).populate("clientId").populate("serviceId");
+        var allRequests = await request_model.find({freelancerId: freelancerId}).populate("clientId", requestClientProjection).populate("serviceId");
 
         if(allRequests.length == 0) {
             return res.status(404).json({ msg:"No requests found!" });
         }
 
         const requests = allRequests.map((request) => {
-            const modifiedRequest = { ...request._doc }; // Create a copy of the service object
-            modifiedRequest.serviceId = { ...modifiedRequest.serviceId._doc }; // Create a copy of the freelancerId object
+            const modifiedRequest = toRequestResponse(request);
+            modifiedRequest.serviceId = { ...toPlainRecord(modifiedRequest.serviceId) }; // Create a copy of the freelancerId object
             modifiedRequest.serviceId.serviceCover_url = "http://" + req.hostname + ":3000/uploads/" + modifiedRequest.serviceId.serviceCover_url;
             return modifiedRequest;
         });
@@ -83,7 +115,7 @@ export const getUserRequests = async (req, res) => {
         var allRequests
 
         if(role == "freelancer") {
-            var allRequests = await request_model.find({freelancerId: userId}).populate("clientId").populate("serviceId");
+            var allRequests = await request_model.find({freelancerId: userId}).populate("clientId", requestClientProjection).populate("serviceId");
         }
         else if(role == "client") {
             var allRequests = await request_model.find({clientId: userId}).populate("freelancerId").populate("serviceId");
@@ -97,8 +129,10 @@ export const getUserRequests = async (req, res) => {
         }
 
         const requests = allRequests.map((request) => {
-            const modifiedRequest = { ...request._doc }; // Create a copy of the service object
-            modifiedRequest.serviceId = { ...modifiedRequest.serviceId._doc }; // Create a copy of the freelancerId object
+            const modifiedRequest = role == "freelancer"
+                ? toRequestResponse(request)
+                : { ...toPlainRecord(request) };
+            modifiedRequest.serviceId = { ...toPlainRecord(modifiedRequest.serviceId) }; // Create a copy of the freelancerId object
             modifiedRequest.serviceId.serviceCover_url = "http://" + req.hostname + ":3000/uploads/" + modifiedRequest.serviceId.serviceCover_url;
             return modifiedRequest;
         });

@@ -1,10 +1,43 @@
 
 import conversation from "../../../DB/models/conversation_model.js";
 
+const conversationClientProjection = Object.freeze({
+    _id: 1,
+    name: 1,
+    image_url: 1,
+    coverImage_url: 1,
+    country: 1,
+});
+
+const toPlainRecord = (record) => record?._doc ?? record;
+
+const toConversationClient = (clientRecord) => {
+    const client = toPlainRecord(clientRecord);
+    if (!client) return client;
+
+    return {
+        _id: client._id,
+        name: client.name,
+        image_url: client.image_url,
+        coverImage_url: client.coverImage_url,
+        country: client.country,
+    };
+};
+
+const toConversationResponse = (conversationRecord) => {
+    const conversationData = toPlainRecord(conversationRecord);
+
+    return {
+        ...conversationData,
+        client: toConversationClient(conversationData.client),
+    };
+};
+
 // Get All Conversations
 export const getAllConversations = async (req, res) => {
     try {
-        const allConversations = await conversation.find().populate('freelancer').populate('client');
+        const conversationRecords = await conversation.find().populate('freelancer').populate('client', conversationClientProjection);
+        const allConversations = conversationRecords.map(toConversationResponse);
         if(allConversations.length !== 0) {
             res.status(200).json({ allConversations });
         }
@@ -26,10 +59,12 @@ export const getConversationById = async (req, res) => {
         //     return res.status(404).json({ msg: "Invalid Id" });
         // }
     
-        const conversationData = await conversation.findById(id).populate("freelancer").populate("client");
-        if (!conversationData) {
+        const conversationRecord = await conversation.findById(id).populate("freelancer").populate("client", conversationClientProjection);
+        if (!conversationRecord) {
             return res.status(404).json({ msg: "Conversation Not Found" });
         }
+
+        const conversationData = toConversationResponse(conversationRecord);
 
         conversationData.freelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + conversationData.freelancer.image_url;
         conversationData.client.image_url = "http://" + req.hostname + ":3000/uploads/" + conversationData.client.image_url;
@@ -57,21 +92,20 @@ export const getConversationsByUserId = async (req, res) => {
 
         let freelancer = userId;
 
-        let conversationData = await conversation.find({ freelancer }).populate('freelancer').populate('client').populate("lastMessage");
+        let conversationData = await conversation.find({ freelancer }).populate('freelancer').populate('client', conversationClientProjection).populate("lastMessage");
         // console.log(conversationData);
 
         if(!conversationData[0]) {
             let client = userId;
-            conversationData = await conversation.find({ client }).populate('freelancer').populate('client').populate("lastMessage");
+            conversationData = await conversation.find({ client }).populate('freelancer').populate('client', conversationClientProjection).populate("lastMessage");
         }
 
         if(conversationData[0]) {
 
             const modifiedConversations = conversationData.map((conversation) => {
-                const modifiedConversation = { ...conversation._doc }; // Create a copy of the service object
-                modifiedConversation.freelancer = { ...modifiedConversation.freelancer._doc }; // Create a copy of the freelancerId object
+                const modifiedConversation = toConversationResponse(conversation);
+                modifiedConversation.freelancer = { ...toPlainRecord(modifiedConversation.freelancer) }; // Create a copy of the freelancerId object
                 modifiedConversation.freelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedConversation.freelancer.image_url;
-                modifiedConversation.client = { ...modifiedConversation.client._doc }; // Create a copy of the freelancerId object
                 modifiedConversation.client.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedConversation.client.image_url;
                 return modifiedConversation;
             });
@@ -113,7 +147,8 @@ export const addConversation = async (req, res) => {
 
         await newConversation.save();
 
-        const newConversationData = await conversation.find(newConversation._id).populate('freelancer', {_id: 1, name: 1, email: 1}).populate('client', {_id: 1, name: 1, email: 1});
+        const newConversationRecords = await conversation.find(newConversation._id).populate('freelancer', {_id: 1, name: 1, email: 1}).populate('client', conversationClientProjection);
+        const newConversationData = newConversationRecords.map(toConversationResponse);
 
         res.status(200).json({ msg:"Conversation has been created successfuly.", newConversationData});
     } catch (error) {
