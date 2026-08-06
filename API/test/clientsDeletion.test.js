@@ -14,7 +14,7 @@ import express from "express";
 import { createClientsRouter } from "../src/modules/clients/clientsRoutes.js";
 import { createDeleteClientController } from "../src/modules/clients/clientsController.js";
 import { createClientOperations } from "../src/modules/clients/clientsOperations.js";
-import { handleClientProfileUpdateParseError } from "../src/modules/clients/clientRequest.middleware.js";
+import { handleClientDeletionParseError } from "../src/modules/clients/clientRequest.middleware.js";
 import { createClientImageLifecycle } from "../src/modules/clients/clientImageLifecycle.js";
 import { errorHandler } from "../src/middleware/error.middleware.js";
 
@@ -47,7 +47,7 @@ const withImageLifecycle = async (operation, overrides = {}) => {
 const withTestServer = async (router, operation) => {
   const app = express();
   app.use(express.json());
-  app.use(handleClientProfileUpdateParseError);
+  app.use(handleClientDeletionParseError);
   app.use("/api/v1/clients", router);
   app.use(errorHandler);
 

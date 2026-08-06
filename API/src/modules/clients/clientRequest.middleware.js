@@ -39,10 +39,10 @@ export const handleClientPasswordRequestParseError =
   createClientParseErrorHandler(clientPasswordPathPattern);
 
 export const handleClientProfileUpdateParseError =
-  createClientParseErrorHandler(clientProfileUpdatePathPattern, [
-    "PATCH",
-    "DELETE",
-  ]);
+  createClientParseErrorHandler(clientProfileUpdatePathPattern);
+
+export const handleClientDeletionParseError =
+  createClientParseErrorHandler(clientProfileUpdatePathPattern, ["DELETE"]);
 
 const respondToClientRequestValidationError = (error, res, next) => {
   if (error instanceof ClientValidationError) {
