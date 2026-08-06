@@ -603,3 +603,126 @@ test("Review responses expose only their explicit Client allowlist", async (t) =
     ],
   });
 });
+
+test("image-normalizing responses preserve a missing populated Client", async (t) => {
+  await t.test("single Conversation", async (t) => {
+    const originalFindById = Conversation.findById;
+    const conversation = {
+      _doc: {
+        _id: "conversation-with-missing-client",
+        freelancer: {
+          _id: "freelancer-9",
+          image_url: "freelancer-nine.jpg",
+        },
+        client: null,
+      },
+    };
+    Conversation.findById = () =>
+      createPopulatedQuery({ populationCalls: [], result: conversation });
+    t.after(() => {
+      Conversation.findById = originalFindById;
+    });
+    const response = createResponse();
+
+    await getConversationById(
+      {
+        params: { id: "conversation-with-missing-client" },
+        hostname: "api.test",
+      },
+      response,
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body, {
+      conversationData: {
+        _id: "conversation-with-missing-client",
+        freelancer: {
+          _id: "freelancer-9",
+          image_url: "http://api.test:3000/uploads/freelancer-nine.jpg",
+        },
+        client: null,
+      },
+    });
+  });
+
+  await t.test("user Conversation list", async (t) => {
+    const originalDeleteMany = Conversation.deleteMany;
+    const originalFind = Conversation.find;
+    const conversation = {
+      _doc: {
+        _id: "conversation-list-with-missing-client",
+        freelancer: {
+          _doc: {
+            _id: "freelancer-10",
+            image_url: "freelancer-ten.jpg",
+          },
+        },
+        client: null,
+      },
+    };
+    Conversation.deleteMany = async () => undefined;
+    Conversation.find = () =>
+      createPopulatedQuery({ populationCalls: [], result: [conversation] });
+    t.after(() => {
+      Conversation.deleteMany = originalDeleteMany;
+      Conversation.find = originalFind;
+    });
+    const response = createResponse();
+
+    await getConversationsByUserId(
+      { params: { id: "freelancer-10" }, hostname: "api.test" },
+      response,
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body, {
+      result: [
+        {
+          _id: "conversation-list-with-missing-client",
+          freelancer: {
+            _id: "freelancer-10",
+            image_url: "http://api.test:3000/uploads/freelancer-ten.jpg",
+          },
+          client: null,
+        },
+      ],
+    });
+  });
+
+  await t.test("Review list", async (t) => {
+    const originalFind = Review.find;
+    const review = {
+      _doc: {
+        _id: "review-with-missing-client",
+        rating: 4,
+        clientId: null,
+        serviceId: { _id: "service-6" },
+      },
+    };
+    Review.find = () =>
+      createPopulatedQuery({ populationCalls: [], result: [review] });
+    t.after(() => {
+      Review.find = originalFind;
+    });
+    const response = createResponse();
+
+    await getServiceReviews(
+      { params: { id: "service-6" }, hostname: "api.test" },
+      response,
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body, {
+      success: true,
+      message: "here u r",
+      reviews: [
+        {
+          _id: "review-with-missing-client",
+          rating: 4,
+          clientId: null,
+          serviceId: { _id: "service-6" },
+        },
+      ],
+    });
+  });
+});

@@ -67,7 +67,9 @@ export const getConversationById = async (req, res) => {
         const conversationData = toConversationResponse(conversationRecord);
 
         conversationData.freelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + conversationData.freelancer.image_url;
-        conversationData.client.image_url = "http://" + req.hostname + ":3000/uploads/" + conversationData.client.image_url;
+        if (conversationData.client) {
+            conversationData.client.image_url = "http://" + req.hostname + ":3000/uploads/" + conversationData.client.image_url;
+        }
         return res.status(200).json({conversationData});
 
     } catch (error) {
@@ -106,7 +108,9 @@ export const getConversationsByUserId = async (req, res) => {
                 const modifiedConversation = toConversationResponse(conversation);
                 modifiedConversation.freelancer = { ...toPlainRecord(modifiedConversation.freelancer) }; // Create a copy of the freelancerId object
                 modifiedConversation.freelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedConversation.freelancer.image_url;
-                modifiedConversation.client.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedConversation.client.image_url;
+                if (modifiedConversation.client) {
+                    modifiedConversation.client.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedConversation.client.image_url;
+                }
                 return modifiedConversation;
             });
 

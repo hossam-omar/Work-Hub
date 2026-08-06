@@ -87,7 +87,9 @@ export const getServiceReviews = async (req, res) => {
 
         const modifiedReviews = reviews.map((review) => {
             const modifiedReview = toReviewResponse(review);
-            modifiedReview.clientId.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedReview.clientId.image_url;
+            if (modifiedReview.clientId) {
+                modifiedReview.clientId.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedReview.clientId.image_url;
+            }
             return modifiedReview;
         });
 
