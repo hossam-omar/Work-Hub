@@ -6,6 +6,7 @@ import {
   unsupportedClientMediaType,
 } from "./clientErrors.js";
 import {
+  parseClientDeletionRequest,
   parseClientPasswordRequest,
   parseClientProfileUpdateRequest,
 } from "./clientsSchema.js";
@@ -17,10 +18,10 @@ import {
 const clientPasswordPathPattern = /^\/api\/v1\/clients\/me\/password\/?$/i;
 const clientProfileUpdatePathPattern = /^\/api\/v1\/clients\/me\/?$/i;
 
-const createClientParseErrorHandler = (pathPattern) => {
+const createClientParseErrorHandler = (pathPattern, methods = ["PATCH"]) => {
   return (error, req, res, next) => {
     const isTargetRequest =
-      req.method === "PATCH" && pathPattern.test(req.path);
+      methods.includes(req.method) && pathPattern.test(req.path);
 
     if (isTargetRequest && error?.type === "entity.parse.failed") {
       const clientError = invalidClientRequest();
@@ -38,7 +39,10 @@ export const handleClientPasswordRequestParseError =
   createClientParseErrorHandler(clientPasswordPathPattern);
 
 export const handleClientProfileUpdateParseError =
-  createClientParseErrorHandler(clientProfileUpdatePathPattern);
+  createClientParseErrorHandler(clientProfileUpdatePathPattern, [
+    "PATCH",
+    "DELETE",
+  ]);
 
 const respondToClientRequestValidationError = (error, res, next) => {
   if (error instanceof ClientValidationError) {
@@ -79,6 +83,12 @@ export const validateClientPasswordRequest =
   createClientJsonRequestValidator({
     localKey: "clientPasswordChange",
     parseRequest: parseClientPasswordRequest,
+  });
+
+export const validateClientDeletionRequest =
+  createClientJsonRequestValidator({
+    localKey: "clientDeletion",
+    parseRequest: parseClientDeletionRequest,
   });
 
 const createClientImageStagingStorage = (imageLifecycle) => ({

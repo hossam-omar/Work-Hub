@@ -17,6 +17,8 @@ const clientPasswordFields = [
   "confirmPassword",
 ];
 const clientPasswordFieldSet = new Set(clientPasswordFields);
+const clientDeletionFields = ["currentPassword"];
+const clientDeletionFieldSet = new Set(clientDeletionFields);
 const clientProfileUpdateFields = ["name", "email"];
 const clientProfileUpdateFieldSet = new Set(clientProfileUpdateFields);
 const clientProfileValidationMessages = Object.freeze({
@@ -158,6 +160,27 @@ export const parseClientPasswordRequest = ({
   return Object.fromEntries(
     clientPasswordFields.map((field) => [field, body[field]]),
   );
+};
+
+export const parseClientDeletionRequest = ({
+  body,
+  params = {},
+  query = {},
+} = {}) => {
+  assertClientMutationRequestStructure({
+    allowedFields: clientDeletionFieldSet,
+    body,
+    maximumFieldCount: clientDeletionFields.length,
+    minimumFieldCount: clientDeletionFields.length,
+    params,
+    query,
+  });
+
+  if (typeof body.currentPassword !== "string") {
+    throw invalidClientRequest();
+  }
+
+  return { currentPassword: body.currentPassword };
 };
 
 export const parseClientProfileUpdateRequest = ({
