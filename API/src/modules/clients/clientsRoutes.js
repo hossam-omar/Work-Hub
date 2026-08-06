@@ -11,10 +11,10 @@ import {
   updateClientProfile,
 } from "./clientsController.js";
 import endPoints from "../../middleware/endPoints.js";
-import { validateParams } from "../../middleware/val.middleware.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { parsePublicClientLookupRequest } from "./clientsSchema.js";
 import {
+  validateClientDeletionRequest,
   validateClientPasswordRequest,
   validateClientProfileUpdateRequest,
 } from "./clientRequest.middleware.js";
@@ -39,7 +39,9 @@ const validatePublicClientLookupRequest = (req, res, next) => {
 export const createClientsRouter = ({
   changePasswordHandler = changeClientPassword,
   clientAuthHandler = auth(endPoints.client),
+  clientDeletionRequestHandler = validateClientDeletionRequest,
   clientPasswordRequestHandler = validateClientPasswordRequest,
+  deleteClientHandler = deleteClient,
   getPublicProfileByIdHandler = getPublicProfileById,
   listPublicProfilesHandler = listPublicProfiles,
   updateProfileHandler = updateClientProfile,
@@ -49,6 +51,12 @@ export const createClientsRouter = ({
   const router = express.Router();
 
   router.get("/", asyncHandler(listPublicProfilesHandler));
+  router.delete(
+    "/me",
+    clientAuthHandler,
+    clientDeletionRequestHandler,
+    asyncHandler(deleteClientHandler),
+  );
   router.patch(
     "/me/password",
     clientAuthHandler,
@@ -67,12 +75,6 @@ export const createClientsRouter = ({
     validatePublicClientLookupRequest,
     asyncHandler(getPublicProfileByIdHandler),
   );
-  router.delete(
-    "/deleteClient/:id",
-    validateParams(),
-    asyncHandler(deleteClient),
-  );
-
   return router;
 };
 

@@ -134,3 +134,19 @@ export const clientProfileChangeConflict = () => {
     "Client profile changed; please retry.",
   );
 };
+
+export const clientDeletionBlocked = () => {
+  return new ClientError(
+    "CLIENT_DELETION_BLOCKED",
+    409,
+    "Client account cannot be deleted while related records exist.",
+  );
+};
+
+export const clientDeletionConflict = () => {
+  return new ClientError(
+    "CLIENT_DELETION_CONFLICT",
+    409,
+    "Client account changed during deletion. Please sign in again.",
+  );
+};

@@ -5,6 +5,8 @@ import FreelancerModel from "../../../DB/models/freelancer_model.js";
 import { getSaltRounds } from "../../config/saltRounds.js";
 import {
   clientAccountNotFound,
+  clientDeletionBlocked,
+  clientDeletionConflict,
   clientEmailConflict,
   clientPasswordChangeConflict,
   clientProfileChangeConflict,
@@ -19,10 +21,16 @@ import {
   toPublicClientProfile,
 } from "./clientRepresentations.js";
 import { clientImageLifecycle } from "./clientImageLifecycle.js";
+import { clientDeletionGuard } from "./clientDeletionGuard.js";
 
 const publicClientProfileSort = Object.freeze({
   createdAt: -1,
   _id: -1,
+});
+const clientDeletionProjection = Object.freeze({
+  password: 1,
+  image_url: 1,
+  coverImage_url: 1,
 });
 
 const normalizeStoredProfileValue = (field, value) => {
@@ -50,6 +58,7 @@ const isClientEmailDuplicateKeyError = (error) => {
 export const createClientOperations = ({
   adminModel = AdminModel,
   clientModel = ClientModel,
+  deletionGuard = clientDeletionGuard,
   freelancerModel = FreelancerModel,
   getPasswordSaltRounds = getSaltRounds,
   imageLifecycle = clientImageLifecycle,
@@ -64,6 +73,56 @@ export const createClientOperations = ({
   };
 
   return {
+    deleteAccount: async ({ clientId, currentPassword, correlationId }) => {
+      const storedClient = await clientModel
+        .findById(clientId, clientDeletionProjection)
+        .lean();
+
+      if (!storedClient) {
+        throw clientAccountNotFound();
+      }
+
+      const currentPasswordMatches = await passwordHasher.compare(
+        currentPassword,
+        storedClient.password,
+      );
+      if (!currentPasswordMatches) {
+        throw incorrectCurrentClientPassword();
+      }
+
+      if (await deletionGuard.isBlocked(clientId)) {
+        throw clientDeletionBlocked();
+      }
+
+      const deletionResult = await clientModel.deleteOne({
+        _id: clientId,
+        password: storedClient.password,
+      });
+      if (deletionResult.deletedCount !== 1) {
+        const clientStillExists = await clientModel.exists({ _id: clientId });
+        if (!clientStillExists) {
+          throw clientAccountNotFound();
+        }
+        throw clientDeletionConflict();
+      }
+
+      await Promise.all([
+        preservePrimaryOutcome(() =>
+          imageLifecycle.cleanupManagedReference({
+            reference: storedClient.image_url,
+            operation: "delete-client-profile-image",
+            correlationId,
+          }),
+        ),
+        preservePrimaryOutcome(() =>
+          imageLifecycle.cleanupManagedReference({
+            reference: storedClient.coverImage_url,
+            operation: "delete-client-cover-image",
+            correlationId,
+          }),
+        ),
+      ]);
+    },
     updateProfile: async ({
       clientId,
       updates,

@@ -6,6 +6,7 @@ import { registerRoutes } from "./src/routes/index.js";
 import { errorHandler } from "./src/middleware/error.middleware.js";
 import { notFoundHandler } from "./src/middleware/not-found.middleware.js";
 import {
+  handleClientDeletionParseError,
   handleClientPasswordRequestParseError,
   handleClientProfileUpdateParseError,
 } from "./src/modules/clients/clientRequest.middleware.js";
@@ -24,6 +25,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(handleClientPasswordRequestParseError);
 app.use(handleClientProfileUpdateParseError);
+app.use(handleClientDeletionParseError);
 
 registerRoutes(app);
 app.use("/uploads", express.static(uploadsDir));

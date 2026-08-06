@@ -1,5 +1,4 @@
 
-import client from "../../../DB/models/client_model.js";
 import {
   ClientError,
   clientImagePayloadTooLarge,
@@ -190,23 +189,32 @@ export const createClientProfileUpdateErrorHandler = ({
 
 export const handleClientProfileUpdateError =
   createClientProfileUpdateErrorHandler();
-  
-// Delete Client
-export const deleteClient = async (req, res) => {
+
+export const createDeleteClientController = ({
+  operations = clientOperations,
+  logger = console,
+} = {}) => {
+  return async (req, res) => {
     try {
-        const clientId = req.params.id
-        const clientToDelete = await client.findById(clientId);
+      await operations.deleteAccount({
+        clientId: req.user._id,
+        currentPassword: res.locals.clientDeletion.currentPassword,
+        ...(req.id === undefined ? {} : { correlationId: req.id }),
+      });
 
-        if(clientToDelete){
-            const filter = { _id: clientId };
-
-            await client.deleteOne(filter);
-            return res.status(200).send("Client has been deleted successfuly.");
-        }
-
-        res.status(200).send("Client deletion failed.");
+      return res.status(200).json({
+        message: "Client account deleted successfully.",
+      });
     } catch (error) {
-        console.log(error);
-        res.status(500).send("Somthing went wrong!");
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to delete Client account.",
+        redactErrorDetails: true,
+      });
     }
-}
+  };
+};
+
+export const deleteClient = createDeleteClientController();
