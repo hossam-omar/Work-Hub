@@ -2,6 +2,38 @@
 import Review from '../../../DB/models/review_model.js';
 import service_model from '../../../DB/models/service_model.js';
 
+const reviewClientProjection = Object.freeze({
+    _id: 1,
+    name: 1,
+    image_url: 1,
+    coverImage_url: 1,
+    country: 1,
+});
+
+const toPlainRecord = (record) => record?._doc ?? record;
+
+const toReviewClient = (clientRecord) => {
+    const client = toPlainRecord(clientRecord);
+    if (!client) return client;
+
+    return {
+        _id: client._id,
+        name: client.name,
+        image_url: client.image_url,
+        coverImage_url: client.coverImage_url,
+        country: client.country,
+    };
+};
+
+const toReviewResponse = (reviewRecord) => {
+    const review = toPlainRecord(reviewRecord);
+
+    return {
+        ...review,
+        clientId: toReviewClient(review.clientId),
+    };
+};
+
 // Create a new review
 export const createReview = async (req, res) => {
     try {
@@ -47,15 +79,17 @@ export const createReview = async (req, res) => {
 export const getServiceReviews = async (req, res) => {
     try {
         const serviceId = req.params.id;
-        var reviews = await Review.find({ serviceId }).populate("clientId").populate("serviceId");
+        var reviews = await Review.find({ serviceId }).populate("clientId", reviewClientProjection).populate("serviceId");
 
         if(reviews.length == 0) {
             return res.status(404).json({ msg:"No reviews found!" });
         }
 
         const modifiedReviews = reviews.map((review) => {
-            const modifiedReview = { ...review._doc }; // Create a copy of the service object
-            modifiedReview.clientId.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedReview.clientId.image_url;
+            const modifiedReview = toReviewResponse(review);
+            if (modifiedReview.clientId) {
+                modifiedReview.clientId.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedReview.clientId.image_url;
+            }
             return modifiedReview;
         });
 

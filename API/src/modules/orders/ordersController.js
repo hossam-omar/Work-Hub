@@ -1,10 +1,43 @@
 
 import order_model from "../../../DB/models/order_model.js";
 
+const orderClientProjection = Object.freeze({
+    _id: 1,
+    name: 1,
+    image_url: 1,
+    coverImage_url: 1,
+    country: 1,
+});
+
+const toPlainRecord = (record) => record?._doc ?? record;
+
+const toOrderClient = (clientRecord) => {
+    const client = toPlainRecord(clientRecord);
+    if (!client) return client;
+
+    return {
+        _id: client._id,
+        name: client.name,
+        image_url: client.image_url,
+        coverImage_url: client.coverImage_url,
+        country: client.country,
+    };
+};
+
+const toOrderResponse = (orderRecord) => {
+    const order = toPlainRecord(orderRecord);
+
+    return {
+        ...order,
+        clientId: toOrderClient(order.clientId),
+    };
+};
+
 // Get All Orders
 export const getAllOrders = async (req, res) => {
     try {
-        const allOrders = await order_model.find().populate("clientId").populate("freelancerId").populate("serviceId");
+        const orderRecords = await order_model.find().populate("clientId", orderClientProjection).populate("freelancerId").populate("serviceId");
+        const allOrders = orderRecords.map(toOrderResponse);
         if(allOrders.length !== 0) {
             res.status(200).json(allOrders);
         }
@@ -25,10 +58,10 @@ export const getUserOrders = async (req, res) => {
         var Orders
 
         if(role == "freelancer") {
-            Orders = await order_model.find({freelancerId: userId}).populate("clientId").populate("serviceId").populate("freelancerId");
+            Orders = await order_model.find({freelancerId: userId}).populate("clientId", orderClientProjection).populate("serviceId").populate("freelancerId");
         }
         else if(role == "client") {
-            Orders = await order_model.find({clientId: userId}).populate("clientId").populate("serviceId").populate("freelancerId");
+            Orders = await order_model.find({clientId: userId}).populate("clientId", orderClientProjection).populate("serviceId").populate("freelancerId");
         }
         else {
             return res.status(401).json({ msg:"Unauthorized!" });
@@ -39,8 +72,8 @@ export const getUserOrders = async (req, res) => {
         }
 
         const ordersData = Orders.map((order) => {
-            const modifiedRequest = { ...order._doc }; // Create a copy of the service object
-            modifiedRequest.serviceId = { ...modifiedRequest.serviceId._doc }; // Create a copy of the freelancerId object
+            const modifiedRequest = toOrderResponse(order);
+            modifiedRequest.serviceId = { ...toPlainRecord(modifiedRequest.serviceId) }; // Create a copy of the freelancerId object
             modifiedRequest.serviceId.serviceCover_url = "http://" + req.hostname + ":3000/uploads/" + modifiedRequest.serviceId.serviceCover_url;
             return modifiedRequest;
         });
