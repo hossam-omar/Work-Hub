@@ -497,7 +497,7 @@ test("Client Profile maps image storage failures to a redacted generic response 
               throw new Error("storage failure must not reach operations");
             },
           },
-          logger: { error: (...values) => logs.push(values) },
+          logger: { error: (record) => logs.push(record) },
         },
         async (baseUrl) => {
           const form = new FormData();
@@ -519,13 +519,13 @@ test("Client Profile maps image storage failures to a redacted generic response 
       );
 
       assert.deepEqual(logs, [
-        [
-          "Failed to update Client profile.",
-          {
-            name: "ClientImageLifecycleError",
-            category: "storage_failure",
-          },
-        ],
+        {
+          phase: "storage",
+          operation: "Failed to update Client profile.",
+          correlationId: undefined,
+          name: "ClientImageLifecycleError",
+          category: "storage_failure",
+        },
       ]);
       assert.equal(JSON.stringify(logs).includes(root), false);
       assert.deepEqual(await readdir(stagingRoot), []);
@@ -1293,7 +1293,7 @@ test("database failure remains primary when promoted-image cleanup fails", async
         {
           imageLifecycle,
           operations,
-          logger: { error: (...values) => controllerLogs.push(values) },
+          logger: { error: (record) => controllerLogs.push(record) },
           correlationId: "request-43-failure",
         },
         async (baseUrl) => {
@@ -1317,10 +1317,13 @@ test("database failure remains primary when promoted-image cleanup fails", async
 
       assert.equal(promotedCleanupCalls, 1);
       assert.deepEqual(controllerLogs, [
-        [
-          "Failed to update Client profile.",
-          { name: "Error", code: undefined },
-        ],
+        {
+          phase: "database",
+          operation: "Failed to update Client profile.",
+          correlationId: "request-43-failure",
+          name: "Error",
+          code: "UNKNOWN",
+        },
       ]);
       assert.equal(cleanupEvents.length, 1);
       assert.equal(cleanupEvents[0].operation, "discard-unretained-client-image");

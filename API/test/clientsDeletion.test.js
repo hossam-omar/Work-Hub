@@ -630,7 +630,7 @@ test("guard and database failures return a generic response with safe logs and n
           },
           passwordHasher: { compare: async () => true },
         }),
-        logger: { error: (...values) => logs.push(values) },
+        logger: { error: (record) => logs.push(record) },
       });
       const router = createClientsRouter({
         clientAuthHandler: (req, _res, next) => {
@@ -651,10 +651,13 @@ test("guard and database failures return a generic response with safe logs and n
 
       assert.equal(cleanupCalls, 0);
       assert.deepEqual(logs, [
-        [
-          "Failed to delete Client account.",
-          { name: "Error", code: privateError.code },
-        ],
+        {
+          phase: "database",
+          operation: "Failed to delete Client account.",
+          correlationId: undefined,
+          name: "Error",
+          code: privateError.code,
+        },
       ]);
       const serializedLogs = JSON.stringify(logs);
       assert.equal(serializedLogs.includes(privateError.message), false);

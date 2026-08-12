@@ -621,8 +621,8 @@ test("unexpected Client Profile list failures use the exact generic response", a
       },
     },
     logger: {
-      error: (...values) => {
-        loggedErrors.push(values);
+      error: (record) => {
+        loggedErrors.push(record);
       },
     },
   });
@@ -640,8 +640,15 @@ test("unexpected Client Profile list failures use the exact generic response", a
     assert.equal(Object.hasOwn(body, "stack"), false);
   });
 
-  assert.equal(loggedErrors.length, 1);
-  assert.equal(loggedErrors[0][1], databaseError);
+  assert.deepEqual(loggedErrors, [
+    {
+      phase: "database",
+      operation: "Failed to list public Client Profiles.",
+      correlationId: undefined,
+      name: "Error",
+      code: "UNKNOWN",
+    },
+  ]);
 });
 
 test("unexpected Client Profile lookup failures use the exact generic response", async () => {
@@ -654,8 +661,8 @@ test("unexpected Client Profile lookup failures use the exact generic response",
       },
     },
     logger: {
-      error: (...values) => {
-        loggedErrors.push(values);
+      error: (record) => {
+        loggedErrors.push(record);
       },
     },
   });
@@ -674,8 +681,15 @@ test("unexpected Client Profile lookup failures use the exact generic response",
     assert.equal(Object.hasOwn(body, "stack"), false);
   });
 
-  assert.equal(loggedErrors.length, 1);
-  assert.equal(loggedErrors[0][1], databaseError);
+  assert.deepEqual(loggedErrors, [
+    {
+      phase: "database",
+      operation: "Failed to get public Client Profile.",
+      correlationId: undefined,
+      name: "Error",
+      code: "UNKNOWN",
+    },
+  ]);
 });
 
 test("Client model declares the deterministic public-list index", () => {
