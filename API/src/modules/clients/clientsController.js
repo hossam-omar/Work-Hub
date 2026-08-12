@@ -40,7 +40,10 @@ const logClientFailure = ({
   };
 
   try {
-    logger.error(record);
+    const loggingResult = logger.error(record);
+    if (loggingResult && typeof loggingResult.then === "function") {
+      void Promise.resolve(loggingResult).catch(() => undefined);
+    }
   } catch {
     // Logging must never replace the primary Client response.
   }
@@ -52,6 +55,7 @@ export const respondToClientError = ({
   logger = console,
   operation,
   correlationId,
+  phase = "database",
 }) => {
   if (error instanceof ClientImageLifecycleError) {
     if (
@@ -88,7 +92,7 @@ export const respondToClientError = ({
 
   logClientFailure({
     logger,
-    phase: "database",
+    phase,
     operation,
     correlationId,
     error,

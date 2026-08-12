@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import { createRequestContextMiddleware } from "../src/middleware/requestContext.middleware.js";
-import { createClientsRouter } from "../src/modules/clients/clientsRoutes.js";
+import {
+  createClientsRouter,
+  createPublicClientLookupRequestValidator,
+} from "../src/modules/clients/clientsRoutes.js";
 import {
   createChangeClientPasswordController,
   createClientProfileUpdateErrorHandler,
@@ -358,4 +361,69 @@ test("Client storage logs are correlated and logger failures preserve the respon
   assert.deepEqual(loggerFailureResponse.body, {
     message: "Internal server error.",
   });
+});
+
+test("an asynchronously rejected Client logger cannot replace the database response", async () => {
+  const response = createResponse();
+  const controller = createListPublicProfilesController({
+    operations: {
+      listPublicProfiles: async () => {
+        throw new Error("database failure remains primary");
+      },
+    },
+    logger: {
+      error: async () => {
+        throw new Error("async logger unavailable");
+      },
+    },
+  });
+
+  await controller(
+    { id: "request-47-async-logger", query: {} },
+    response,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(response.statusCode, 500);
+  assert.deepEqual(response.body, { message: "Internal server error." });
+});
+
+test("unexpected Client lookup validation failures retain request correlation", () => {
+  const requestId = "request-47-lookup-validation";
+  const records = [];
+  const privateError = Object.assign(
+    new Error("private request body at C:\\private\\request.json"),
+    { code: "CLIENT_PARSE_FAILED" },
+  );
+  const validator = createPublicClientLookupRequestValidator({
+    parseRequest: () => {
+      throw privateError;
+    },
+    logger: { error: (record) => records.push(record) },
+  });
+  const response = createResponse();
+
+  validator(
+    {
+      id: requestId,
+      params: { id: "507f1f77bcf86cd799439011" },
+      query: {},
+    },
+    response,
+    () => assert.fail("the validation failure must be handled"),
+  );
+
+  assert.equal(response.statusCode, 500);
+  assert.deepEqual(response.body, { message: "Internal server error." });
+  assert.deepEqual(records, [
+    {
+      phase: "request",
+      operation: "Failed to validate public Client Profile lookup.",
+      correlationId: requestId,
+      name: "Error",
+      code: "CLIENT_PARSE_FAILED",
+    },
+  ]);
+  assert.equal(JSON.stringify(records).includes(privateError.message), false);
+  assert.equal(JSON.stringify(records).includes("C:\\private"), false);
 });
