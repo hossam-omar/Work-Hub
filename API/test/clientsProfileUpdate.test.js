@@ -747,7 +747,7 @@ test("unexpected Client profile update failures use the exact generic response",
       },
     },
     logger: {
-      error: (...values) => loggedErrors.push(values),
+      error: (record) => loggedErrors.push(record),
     },
   });
   const router = createClientsRouter({
@@ -768,7 +768,13 @@ test("unexpected Client profile update failures use the exact generic response",
   });
 
   assert.deepEqual(loggedErrors, [
-    ["Failed to update Client profile.", databaseError],
+    {
+      phase: "database",
+      operation: "Failed to update Client profile.",
+      correlationId: undefined,
+      name: "Error",
+      code: "UNKNOWN",
+    },
   ]);
 });
 

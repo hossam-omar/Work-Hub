@@ -19,22 +19,33 @@ import {
   validateClientProfileUpdateRequest,
 } from "./clientRequest.middleware.js";
 
-const validatePublicClientLookupRequest = (req, res, next) => {
-  try {
-    res.locals.publicClientProfileId = parsePublicClientLookupRequest({
-      params: req.params,
-      query: req.query,
-    });
+export const createPublicClientLookupRequestValidator = ({
+  parseRequest = parsePublicClientLookupRequest,
+  logger = console,
+} = {}) => {
+  return (req, res, next) => {
+    try {
+      res.locals.publicClientProfileId = parseRequest({
+        params: req.params,
+        query: req.query,
+      });
 
-    return next();
-  } catch (error) {
-    return respondToClientError({
-      error,
-      res,
-      operation: "Failed to validate public Client Profile lookup.",
-    });
-  }
+      return next();
+    } catch (error) {
+      return respondToClientError({
+        error,
+        res,
+        logger,
+        operation: "Failed to validate public Client Profile lookup.",
+        correlationId: req.id,
+        phase: "request",
+      });
+    }
+  };
 };
+
+const validatePublicClientLookupRequest =
+  createPublicClientLookupRequestValidator();
 
 export const createClientsRouter = ({
   changePasswordHandler = changeClientPassword,

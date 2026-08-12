@@ -11,12 +11,51 @@ import {
   ClientImageLifecycleError,
 } from "./clientImageLifecycle.js";
 
+const safeLogName = (name) =>
+  typeof name === "string" && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(name)
+    ? name
+    : "Error";
+
+const safeLogCode = (code) =>
+  typeof code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(code)
+    ? code
+    : "UNKNOWN";
+
+const logClientFailure = ({
+  logger,
+  phase,
+  operation,
+  correlationId,
+  error,
+  category,
+}) => {
+  const record = {
+    phase,
+    operation,
+    correlationId,
+    name: safeLogName(error?.name),
+    ...(category === undefined ? { code: safeLogCode(error?.code) } : {
+      category,
+    }),
+  };
+
+  try {
+    const loggingResult = logger.error(record);
+    if (loggingResult && typeof loggingResult.then === "function") {
+      void Promise.resolve(loggingResult).catch(() => undefined);
+    }
+  } catch {
+    // Logging must never replace the primary Client response.
+  }
+};
+
 export const respondToClientError = ({
   error,
   res,
   logger = console,
   operation,
-  redactErrorDetails = false,
+  correlationId,
+  phase = "database",
 }) => {
   if (error instanceof ClientImageLifecycleError) {
     if (
@@ -36,8 +75,12 @@ export const respondToClientError = ({
       });
     }
 
-    logger.error(operation, {
-      name: error.name,
+    logClientFailure({
+      logger,
+      phase: "storage",
+      operation,
+      correlationId,
+      error,
       category: error.category,
     });
     return res.status(500).json({ message: "Internal server error." });
@@ -47,11 +90,13 @@ export const respondToClientError = ({
     return res.status(error.statusCode).json({ message: error.message });
   }
 
-  const loggedError = redactErrorDetails
-    ? { name: error?.name, code: error?.code }
-    : error;
-
-  logger.error(operation, loggedError);
+  logClientFailure({
+    logger,
+    phase,
+    operation,
+    correlationId,
+    error,
+  });
   return res.status(500).json({ message: "Internal server error." });
 };
 
@@ -71,6 +116,7 @@ export const createListPublicProfilesController = ({
         res,
         logger,
         operation: "Failed to list public Client Profiles.",
+        correlationId: req.id,
       });
     }
   };
@@ -94,6 +140,7 @@ export const createGetPublicProfileByIdController = ({
         res,
         logger,
         operation: "Failed to get public Client Profile.",
+        correlationId: req.id,
       });
     }
   };
@@ -125,7 +172,7 @@ export const createChangeClientPasswordController = ({
         res,
         logger,
         operation: "Failed to change Client password.",
-        redactErrorDetails: true,
+        correlationId: req.id,
       });
     }
   };
@@ -162,8 +209,7 @@ export const createUpdateClientProfileController = ({
         res,
         logger,
         operation: "Failed to update Client profile.",
-        redactErrorDetails:
-          res.locals.clientProfileImageUploadHandle !== undefined,
+        correlationId: req.id,
       });
     }
   };
@@ -175,7 +221,7 @@ export const updateClientProfile =
 export const createClientProfileUpdateErrorHandler = ({
   logger = console,
 } = {}) => {
-  return (error, _req, res, next) => {
+  return (error, req, res, next) => {
     if (res.headersSent) return next(error);
 
     return respondToClientError({
@@ -183,6 +229,7 @@ export const createClientProfileUpdateErrorHandler = ({
       res,
       logger,
       operation: "Failed to update Client profile.",
+      correlationId: req.id,
     });
   };
 };
@@ -211,7 +258,7 @@ export const createDeleteClientController = ({
         res,
         logger,
         operation: "Failed to delete Client account.",
-        redactErrorDetails: true,
+        correlationId: req.id,
       });
     }
   };

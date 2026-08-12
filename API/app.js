@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { registerRoutes } from "./src/routes/index.js";
 import { errorHandler } from "./src/middleware/error.middleware.js";
 import { notFoundHandler } from "./src/middleware/not-found.middleware.js";
+import { requestContext } from "./src/middleware/requestContext.middleware.js";
 import {
   handleClientDeletionParseError,
   handleClientPasswordRequestParseError,
@@ -17,6 +18,7 @@ const uploadsDir = path.join(__dirname, "uploads");
 
 const app = express();
 
+app.use(requestContext);
 app.use(
   cors({
     origin: "*",//TODO: Change this to the actual frontend URL in production

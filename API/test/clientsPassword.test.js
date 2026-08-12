@@ -847,7 +847,7 @@ test("unexpected Client password failures use generic responses and safe logs", 
       },
     },
     logger: {
-      error: (...values) => loggedErrors.push(values),
+      error: (record) => loggedErrors.push(record),
     },
   });
   const router = createClientsRouter({
@@ -868,10 +868,13 @@ test("unexpected Client password failures use generic responses and safe logs", 
   });
 
   assert.deepEqual(loggedErrors, [
-    [
-      "Failed to change Client password.",
-      { name: "Error", code: "MONGO_WRITE_FAILED" },
-    ],
+    {
+      phase: "database",
+      operation: "Failed to change Client password.",
+      correlationId: undefined,
+      name: "Error",
+      code: "MONGO_WRITE_FAILED",
+    },
   ]);
   const serializedLogs = JSON.stringify(loggedErrors);
   assert.equal(
