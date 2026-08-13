@@ -29,4 +29,6 @@ const conversationSchema = new Schema(
   },
 );
 
+conversationSchema.index({ client: 1 });
+
 export default mongoose.model("conversation", conversationSchema);

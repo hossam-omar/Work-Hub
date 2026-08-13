@@ -57,4 +57,6 @@ const courseSchema = new Schema(
   },
 );
 
+courseSchema.index({ enrolledClientsIds: 1 });
+
 export default mongoose.model("course", courseSchema);

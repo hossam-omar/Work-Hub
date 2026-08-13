@@ -28,4 +28,6 @@ const requestSchema = new Schema(
   },
 );
 
+requestSchema.index({ clientId: 1 });
+
 export default mongoose.model("request", requestSchema);

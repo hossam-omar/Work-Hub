@@ -33,4 +33,6 @@ const messageSchema = new Schema(
   },
 );
 
+messageSchema.index({ senderId: 1, senderType: 1 });
+
 export default mongoose.model("message", messageSchema);

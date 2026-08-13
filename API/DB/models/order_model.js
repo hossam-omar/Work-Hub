@@ -33,4 +33,6 @@ const orderSchema = new Schema(
   },
 );
 
+orderSchema.index({ clientId: 1 });
+
 export default mongoose.model("order", orderSchema);

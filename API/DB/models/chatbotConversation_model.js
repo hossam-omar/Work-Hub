@@ -17,4 +17,6 @@ const chatbotConversation = new Schema(
   },
 );
 
+chatbotConversation.index({ senderId: 1, senderRole: 1 });
+
 export default mongoose.model("chatbotConversation", chatbotConversation);

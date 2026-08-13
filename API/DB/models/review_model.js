@@ -28,4 +28,6 @@ const reviewSchema = new Schema(
   },
 );
 
+reviewSchema.index({ clientId: 1 });
+
 export default mongoose.model("review", reviewSchema);
