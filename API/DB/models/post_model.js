@@ -80,5 +80,7 @@ const postSchema = new Schema(
 postSchema.index({ posterType: 1, posterId: 1 });
 postSchema.index({ communityId: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
+postSchema.index({ "comments.userId": 1, "comments.userRole": 1 });
+postSchema.index({ likes: 1 });
 
 export default mongoose.model("post", postSchema);
