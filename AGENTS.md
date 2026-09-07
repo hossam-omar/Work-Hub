@@ -13,15 +13,15 @@ Work-Hub is a freelancing marketplace platform being refactored into an intervie
 - Frontend folder: `Front-End`
 - Do not touch `Front-End` unless the user explicitly requests it.
 
-## Target Backend Direction
+## Chosen Backend Direction
 
 - Node.js
 - Express.js
-- PostgreSQL
-- Prisma ORM
+- MongoDB
+- Mongoose
 - JavaScript for now
 
-The current active backend still uses MongoDB/Mongoose. Prisma/PostgreSQL work should be introduced gradually.
+MongoDB with Mongoose is the current chosen database direction. Improve the existing backend and data model in small, reviewable steps.
 
 ## Working Rules
 
@@ -64,7 +64,6 @@ The current active backend still uses MongoDB/Mongoose. Prisma/PostgreSQL work s
 ## Validation Rules
 
 - Run available backend checks before reporting completion.
-- Run `npm run prisma:generate` and `npx prisma validate` if Prisma files or Prisma dependencies change.
 - Run `npm run start` when backend startup could be affected.
 - If tests do not exist, say so clearly.
 - If MongoDB is not running locally, report that separately instead of hiding the error.
