@@ -4,9 +4,9 @@ Work-Hub is a freelancing marketplace platform that connects clients with freela
 
 ## Project Status
 
-This repository started as a graduation project and is currently being refactored into an interview-ready backend/database portfolio project. The current focus is backend and database architecture. The frontend still exists in the repository, but the active improvement phase is focused on the API, data model, security, maintainability, and migration planning.
+This repository started as a graduation project and is currently being refactored into an interview-ready backend/database portfolio project. The current focus is backend and database architecture. The frontend still exists in the repository, but the active improvement phase is focused on the API, data model, security, and maintainability.
 
-The active backend still uses MongoDB with Mongoose. A Prisma/PostgreSQL foundation exists, but the full backend has not yet been migrated to PostgreSQL.
+MongoDB with Mongoose is the project's chosen database direction and the active backend's only database dependency.
 
 ## Main Features
 
@@ -31,13 +31,8 @@ Some modules are legacy and still being reviewed as part of the backend refactor
 - JavaScript ES modules
 
 **Database**
-- Current implementation: MongoDB
-- Current data access: Mongoose
-- Target refactor direction: PostgreSQL
-
-**ORM**
-- Current active models: Mongoose models
-- Planned/in-progress foundation: Prisma ORM
+- MongoDB
+- Mongoose for schemas, models, and data access
 
 **Frontend**
 - React.js
@@ -49,7 +44,6 @@ Some modules are legacy and still being reviewed as part of the backend refactor
 - Nodemon
 - dotenv
 - Joi validation
-- Prisma CLI
 
 ## Repository Structure
 
@@ -59,7 +53,6 @@ Work-Hub/
     app.js
     server.js
     DB/
-    prisma/
     src/
   Front-End/
   README.md
@@ -85,7 +78,7 @@ On Windows PowerShell, you can copy it with:
 Copy-Item .env.example .env
 ```
 
-Then start the backend:
+Set the local JWT secret and ensure MongoDB is running at `CONNECTION_URL`, then start the backend:
 
 ```bash
 npm run start
@@ -102,7 +95,6 @@ The backend environment is documented in `API/.env.example`:
 - `TOKEN_SECRETkEY`: existing JWT secret variable name used by the current auth code.
 - `BEARER_KEY`: token prefix expected by current auth middleware.
 - `SALT_ROUND`: password hashing salt rounds.
-- `DATABASE_URL`: PostgreSQL connection string for Prisma work.
 
 ## Bootstrap the First Admin
 
@@ -128,6 +120,8 @@ The command works only while the Admin collection is empty and uses a database u
 
 ## Database Notes
 
-The legacy implementation uses MongoDB/Mongoose models in `API/DB/models`. Prisma is present in `API/prisma/schema.prisma` with a PostgreSQL datasource, but models and migrations are still expected to be added incrementally after the relational schema is reviewed.
+The backend uses MongoDB with Mongoose models in `API/DB/models`. MongoDB/Mongoose is the chosen direction for ongoing database work. Legacy modules remain subject to incremental review while preserving existing collections, data, and application behavior.
 
-The migration goal is to move toward a cleaner PostgreSQL schema with Prisma while preserving existing backend behavior in small, reviewable steps.
+`GET /api/health` reports MongoDB readiness from the Mongoose connection state. It returns HTTP `200` with `status: "ok"` when connected, or HTTP `503` with `status: "degraded"` otherwise. The JSON response contains `status`, `environment`, `timestamp`, and `mongo: { status }`.
+
+Run the backend checks with `npm test` from `API`. Health tests cover connected, disconnected, connecting, disconnecting, and unknown MongoDB states without requiring a database connection.
