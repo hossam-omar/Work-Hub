@@ -1,4 +1,4 @@
-import freelancersRoutes from "../modules/freelancer/freelancer_routes.js";
+import freelancersRoutes from "../modules/freelancer/freelancerRouter.js";
 import adminRoutes from "../modules/admin/adminRoutes.js";
 import categoriesRoute from "../modules/categories/categoriesRoutes.js";
 import clientsRoute from "../modules/clients/clientsRoutes.js";

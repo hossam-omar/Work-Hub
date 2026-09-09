@@ -1,6 +1,8 @@
 import express from "express";
+import auth from "../../middleware/auth.middleware.js";
 import valMiddleware from "../../middleware/val.middleware.js";
 import { updatePasswordSchema } from "../validation/validation.js";
+import endPoints from "../../middleware/endPoints.js";
 import {
   getAllFreelancers,
   deleteFreelancer,
@@ -9,7 +11,6 @@ import {
   getFreelancerById,
 } from "./freelancerController.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import endPoints from "../../middleware/endPoints.js";
 import { updateInfoSchema } from "./freelancersSchema.js";
 import { upload } from "../../middleware/uploadImages.js";
 
@@ -24,21 +25,17 @@ router.get(
 router.get("/getFreelancerById/:id", getFreelancerById);
 router.put(
   "/updateFreelancerInfo/:id",
-  validateParams(),
   valMiddleware(updateInfoSchema),
   upload.single("image"),
   updateFreelancerInfo,
 );
-// router.put('/uploadImage/:id', upload.single('image'), uploadImage);
 router.put(
   "/updateFreelancerPassword/:id",
-  validateParams(),
   valMiddleware(updatePasswordSchema),
   updateFreelancerPassword,
 );
 router.delete(
   "/deleteFreelancer/:id",
-  validateParams(),
   asyncHandler(deleteFreelancer),
 );
 
