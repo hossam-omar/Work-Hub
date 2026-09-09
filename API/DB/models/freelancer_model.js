@@ -16,15 +16,15 @@ const freelancerSchema = new Schema(
       type: String,
       required: true,
     },
+    phoneNumber: {
+      type: String,
+      required: true,
+    },
     image_url: {
       type: String,
     },
     coverImage_url: {
       type: String,
-    },
-    phoneNumber: {
-      type: String,
-      required: true,
     },
     country: {
       type: String,
@@ -36,28 +36,22 @@ const freelancerSchema = new Schema(
     activityStatus: {
       type: String,
       default: "offline",
-      required: false,
     },
     lastLogin: {
       type: Date,
-      required: false,
     },
     languages: {
       type: [String],
-      required: false,
     },
     skills: {
       type: [String],
-      required: false,
     },
     servicesCount: {
       type: Number,
-      required: false,
       default: 0,
     },
     specialization: {
       type: String,
-      required: false,
     },
     role: {
       type: String,

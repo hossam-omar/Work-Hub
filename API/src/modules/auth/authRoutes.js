@@ -51,6 +51,5 @@ router.put(
   validateParams(),
   asyncHandler(logout),
 );
-// router.put('/uploadImage/:id/:role', upload.single('image'), uploadImage);
 
 export default router;
