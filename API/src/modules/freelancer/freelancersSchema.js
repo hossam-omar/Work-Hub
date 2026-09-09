@@ -21,6 +21,16 @@ const freelancerSkills = Joi.array().items(Joi.string().trim().max(50));
 const freelancerServicesCount = Joi.number().integer().min(0);
 const freelancerSpecialization = Joi.string().trim().max(100);
 const freelancerActivityStatus = Joi.string().valid("online", "offline");
+export const updateInfoSchema = Joi.object({
+  name: Joi.string(),
+  email: Joi.string().email({ minDomainSegments: 2, tlds: { allow: ["com", "net"] } }),
+  image_url: Joi.string(),
+  phoneNumber: Joi.string()
+    .regex(/^\d{11}$/)
+    .message("Invalid phone number. Must be 11 digits."),
+  country: Joi.string(),
+  desc: Joi.string(),
+});
 const getFreelancersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
