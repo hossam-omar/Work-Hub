@@ -31,6 +31,20 @@ export const updateInfoSchema = Joi.object({
   country: Joi.string(),
   desc: Joi.string(),
 });
+export const updatePasswordSchema = Joi.object({
+  password: Joi.string()
+    .min(8)
+    .max(20)
+    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
+  newPassword: Joi.string()
+    .min(8)
+    .max(20)
+    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
+  confirmNewPassword: Joi.string()
+    .min(8)
+    .max(20)
+    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
+});
 const getFreelancersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
