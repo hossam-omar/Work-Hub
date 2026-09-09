@@ -3,17 +3,27 @@ import mongoose from "mongoose";
 import FreelancerModel from "../../../DB/models/freelancer_model.js";
 import { validatePassword } from '../../middleware/val.middleware.js';
 import bcrypt from 'bcryptjs'
+import {
+  authenticatedFreelancerProjection,
+  freelancerIdentityProjection,
+  publicFreelancerProjection,
+  toAuthenticatedFreelancer,
+  toPublicFreelancer,
+} from "./freelancerRepresentations.js";
+
+const buildLegacyUploadUrl = (req) => (reference) =>
+  "http://" + req.hostname + ":3000/uploads/" + reference;
 
 // Get All Freelancers
 export const getAllFreelancers = async (req,res) => {
   try {
-      var freelancers = await FreelancerModel.find();
+      var freelancers = await FreelancerModel.find({}, publicFreelancerProjection);
       if(freelancers[0]){
-        const modifiedFreelancers = freelancers.map((freelancer) => {
-          const modifiedFreelancer = { ...freelancer._doc }; // Create a copy of the service object
-          modifiedFreelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + modifiedFreelancer.image_url;
-          return modifiedFreelancer;
-      });
+        const modifiedFreelancers = freelancers
+          .map((freelancer) => toPublicFreelancer(freelancer, {
+            buildUploadUrl: buildLegacyUploadUrl(req),
+          }))
+          .filter(Boolean);
 
       freelancers = modifiedFreelancers;
 
@@ -36,16 +46,20 @@ export const getFreelancerById = async (req, res, next) => {
       return res.status(404).send({ success: false, message: "Invalid id" });
   }
 
-  const freelancer = await FreelancerModel.findById(id);
+  const freelancer = await FreelancerModel.findById(id, publicFreelancerProjection);
 
   if (!freelancer) {
     return res.status(404).json({msg: "Freelancer not found"});
   }
 
-  freelancer.image_url = "http://" + req.hostname + ":3000/uploads/" + freelancer.image_url;
-  freelancer.coverImage_url = "http://" + req.hostname + ":3000/uploads/" + freelancer.coverImage_url;
+  const responseFreelancer = toPublicFreelancer(freelancer, {
+    buildUploadUrl: buildLegacyUploadUrl(req),
+  });
+  if (!responseFreelancer) {
+    return res.status(404).json({msg: "Freelancer not found"});
+  }
 
-  res.status(200).json({ freelancer });
+  res.status(200).json({ freelancer: responseFreelancer });
   } catch (error) {
     console.log(error);
     res.status(500).json({msg: "Internal Server Error"});
@@ -86,11 +100,17 @@ export const updateFreelancerInfo = async (req, res) => {
 
       const freelancerId = req.params.id;
       console.log(freelancerId);
-      const freelancerToUpdate = await FreelancerModel.findById(freelancerId);
+      const freelancerToUpdate = await FreelancerModel.findById(
+        freelancerId,
+        authenticatedFreelancerProjection,
+      );
 
       if(freelancerToUpdate) {
           const freelancerEmail = {email: req.body.email};
-          const freelancerData = await FreelancerModel.find(freelancerEmail);
+          const freelancerData = await FreelancerModel.find(
+            freelancerEmail,
+            freelancerIdentityProjection,
+          );
           console.log(freelancerData);
 
           let condition = freelancerData.length === 0;
@@ -104,9 +124,18 @@ export const updateFreelancerInfo = async (req, res) => {
             //   const update = { $set: { name: req.body.name, email: req.body.email, image_url: req.body.image_url, phoneNumber: req.body.phoneNumber, desc: req.body.desc, country: req.body.country } }
               await FreelancerModel.updateOne(filter, update);
 
-              const freelancerNewData = await FreelancerModel.findById(freelancerId);
-              freelancerNewData.image_url = "http://" + req.hostname + ":3000/uploads/" + freelancerNewData.image_url;
-              return res.status(200).json({ msg: "Freelancer has been updated successfuly.", freelancerNewData});
+              const freelancerNewData = await FreelancerModel.findById(
+                freelancerId,
+                authenticatedFreelancerProjection,
+              );
+              const responseFreelancer = toAuthenticatedFreelancer(
+                freelancerNewData,
+                { buildUploadUrl: buildLegacyUploadUrl(req) },
+              );
+              if (!responseFreelancer) {
+                return res.status(200).json({ msg: "There is no Freelancer with such id to update." });
+              }
+              return res.status(200).json({ msg: "Freelancer has been updated successfuly.", freelancerNewData: responseFreelancer});
           }
           return res.status(400).json({ msg: "You cannot use this email." });
       }
