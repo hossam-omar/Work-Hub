@@ -14,10 +14,9 @@ import {
 const buildLegacyUploadUrl = (req) => (reference) =>
   "http://" + req.hostname + ":3000/uploads/" + reference;
 
-// Get All Freelancers
 export const getAllFreelancers = async (req,res) => {
   try {
-      var freelancers = await FreelancerModel.find({}, publicFreelancerProjection);
+      const freelancers = await FreelancerModel.find({}, publicFreelancerProjection);
       if(freelancers[0]){
         const modifiedFreelancers = freelancers
           .map((freelancer) => toPublicFreelancer(freelancer, {
@@ -29,10 +28,10 @@ export const getAllFreelancers = async (req,res) => {
 
       return res.status(200).json({ freelancers });
     }
-    res.status(400).json({msg:'No freelancers found'})
+    res.status(400).json({message:'No freelancers found'})
   } 
   catch (error) {
-    res.status(500).json({msg:'Internal server error'});
+    res.status(500).json({message:'Internal server error'});
     console.log(error);
   }
 }
@@ -49,20 +48,20 @@ export const getFreelancerById = async (req, res, next) => {
   const freelancer = await FreelancerModel.findById(id, publicFreelancerProjection);
 
   if (!freelancer) {
-    return res.status(404).json({msg: "Freelancer not found"});
+    return res.status(404).json({message: "Freelancer not found"});
   }
 
   const responseFreelancer = toPublicFreelancer(freelancer, {
     buildUploadUrl: buildLegacyUploadUrl(req),
   });
   if (!responseFreelancer) {
-    return res.status(404).json({msg: "Freelancer not found"});
+    return res.status(404).json({message: "Freelancer not found"});
   }
 
   res.status(200).json({ freelancer: responseFreelancer });
   } catch (error) {
     console.log(error);
-    res.status(500).json({msg: "Internal Server Error"});
+    res.status(500).json({message: "Internal Server Error"});
   }
 };
 
@@ -76,12 +75,12 @@ export const deleteFreelancer = async (req, res) => {
           const filter = { _id: freelancerId };
 
           await FreelancerModel.deleteOne(filter);
-          return res.status(200).json({ msg: "Freelancer has been deleted successfuly." });
+          return res.status(200).json({ message: "Freelancer has been deleted successfuly." });
       }
-      res.status(200).json({ msg: "Freelancer doesn't exist." });
+      res.status(200).json({ message: "Freelancer doesn't exist." });
   } catch (error) {
       console.log(error);
-      res.status(500).json({ msg: "Somthing went wrong!" });
+      res.status(500).json({ message: "Something went wrong!" });
   }
 }
 
@@ -133,16 +132,16 @@ export const updateFreelancerInfo = async (req, res) => {
                 { buildUploadUrl: buildLegacyUploadUrl(req) },
               );
               if (!responseFreelancer) {
-                return res.status(200).json({ msg: "There is no Freelancer with such id to update." });
+                return res.status(200).json({ message: "There is no Freelancer with such id to update." });
               }
-              return res.status(200).json({ msg: "Freelancer has been updated successfuly.", freelancerNewData: responseFreelancer});
+              return res.status(200).json({ message: "Freelancer has been updated successfuly.", freelancerNewData: responseFreelancer});
           }
-          return res.status(400).json({ msg: "You cannot use this email." });
+          return res.status(400).json({ message: "You cannot use this email." });
       }
-      res.status(200).json({ msg: "There is no Freelancer with such id to update." });
+      res.status(200).json({ message: "There is no Freelancer with such id to update." });
   } catch (error) {
       console.log(error);
-      res.status(500).json({ msg: "Somthing went wrong!" });
+      res.status(500).json({ message: "Something went wrong!" });
   }
 }
 
@@ -150,9 +149,7 @@ export const updateFreelancerInfo = async (req, res) => {
 export const updateFreelancerPassword = async (req, res) => {
   try {
       const freelancerId = req.params.id;
-    //   console.log(freelancerId);
       const freelancerToUpdate = await FreelancerModel.findById(freelancerId);
-    //   console.log(freelancerToUpdate.password);
 
       if (freelancerToUpdate) {
         const passwordInput = req.body.password;
@@ -174,19 +171,19 @@ export const updateFreelancerPassword = async (req, res) => {
                 const update = { $set: { password: newPasswordHash, token: "null" } };
 
                 await FreelancerModel.updateOne(filter, update);
-                return res.status(200).json({ msg:"Freelancer has been updated successfuly." });
+                return res.status(200).json({ message:"Freelancer has been updated successfuly." });
               }
-              return res.status(400).json({ msg: "Password is not valid. Please follow the password pattern." });
+              return res.status(400).json({ message: "Password is not valid. Please follow the password pattern." });
             }
-            return res.status(400).json({ msg: "Passwords don't match." });
+            return res.status(400).json({ message: "Passwords don't match." });
           }
-          return res.status(400).json({ msg: "You cannot use your current password as new password." });
+          return res.status(400).json({ message: "You cannot use your current password as new password." });
         }
-        return res.status(400).json({ msg: "Wrong password." });
+        return res.status(400).json({ message: "Wrong password." });
       }
-      res.status(200).json({ msg: "There is no Freelancer with such id to update." });
+      res.status(200).json({ message: "There is no Freelancer with such id to update." });
   } catch (error) {
       console.log(error);
-      res.status(500).json({ msg: "Somthing went wrong!" });
+      res.status(500).json({ message: "Something went wrong!" });
   }
 }
