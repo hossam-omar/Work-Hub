@@ -20,42 +20,24 @@ const freelancerLanguages = Joi.array().items(Joi.string().trim().max(50));
 const freelancerSkills = Joi.array().items(Joi.string().trim().max(50));
 const freelancerServicesCount = Joi.number().integer().min(0);
 const freelancerSpecialization = Joi.string().trim().max(100);
-const freelancerActivityStatus = Joi.string().valid("online", "offline");
 export const updateInfoSchema = Joi.object({
-  name: Joi.string(),
-  email: Joi.string().email({ minDomainSegments: 2, tlds: { allow: ["com", "net"] } }),
-  image_url: Joi.string(),
-  phoneNumber: Joi.string()
-    .regex(/^\d{11}$/)
-    .message("Invalid phone number. Must be 11 digits."),
-  country: Joi.string(),
-  desc: Joi.string(),
+  name: freelancerName,
+  email: freelancerEmail,
+  image_url: freelancerImageUrl,
+  phoneNumber: freelancerPhoneNumber,
+  country: freelancerCountry,
+  desc: freelancerDesc,
+  languages: freelancerLanguages,
+  skills: freelancerSkills,
+  servicesCount: freelancerServicesCount,
+  specialization: freelancerSpecialization,
 });
 export const updatePasswordSchema = Joi.object({
-  password: Joi.string()
-    .min(8)
-    .max(20)
-    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
-  newPassword: Joi.string()
-    .min(8)
-    .max(20)
-    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
-  confirmNewPassword: Joi.string()
-    .min(8)
-    .max(20)
-    .pattern(new RegExp("^(?=.?[A-Z])(?=.?[a-z])(?=.*?[0-9]).{8,}$")),
+  password: freelancerPassword.required(),
+  newPassword: freelancerPassword.required(),
+  confirmNewPassword: Joi.string().valid(Joi.ref("newPassword")).required(),
 });
-const getFreelancersQuerySchema = Joi.object({
+export const getFreelancersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
-}).unknown(false);
-const createFreelancerSchema = Joi.object({
-  name: freelancerName.required(),
-  email: freelancerEmail.required(),
-  password: freelancerPassword.required(),
-  phone_number: freelancerPhoneNumber.required(),
-  country: freelancerCountry.required(),
-  image_url: freelancerImageUrl,
-  cover_image_url: freelancerImageUrl,
-  activity_status: freelancerActivityStatus,
 }).unknown(false);
